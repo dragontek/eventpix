@@ -176,20 +176,41 @@ export default function JoinPage() {
     };
 
     const handleOAuthLogin = async (providerName: string) => {
-        setLoading(true); // Maybe verify loading state usage
-        // Actually we shouldn't show full screen loading, just button loading maybe. 
-        // But for consistency let's just await.
+        setLoading(true);
         try {
-            await pb.collection('users').authWithOAuth2({ provider: providerName });
+            // If we are already logged in (e.g. as Guest), try to link first
+            if (pb.authStore.isValid && pb.authStore.model) {
+                try {
+                    console.log("Attempting to link social account to guest session...");
+                    const authData = await pb.collection('users').linkWithOAuth2({ provider: providerName });
+
+                    // Optional: Update profile name from social if still "Guest ..."
+                    const meta = authData.meta;
+                    if (meta && meta.name && pb.authStore.model.name.startsWith("Guest ")) {
+                        console.log("Updating guest profile with social info...", meta.name);
+                        await pb.collection('users').update(pb.authStore.model.id, {
+                            name: meta.name,
+                            // Note: Avatar sync typically requires backend handling or file upload, skipping for now
+                        });
+                    }
+                    console.log("Account linked successfully.");
+                } catch (linkErr) {
+                    console.warn("Link failed (likely account exists), falling back to switch.", linkErr);
+                    // Fallback: Account probably exists, so just log in as that user
+                    await pb.collection('users').authWithOAuth2({ provider: providerName });
+                }
+            } else {
+                // Not logged in, standard auth
+                await pb.collection('users').authWithOAuth2({ provider: providerName });
+            }
+
             // Auth successful, now join
             if (event) {
-                // If not PIN required, go, else we are just authed and can proceed to PIN entry if not already done.
-                // But typically we do this *instead* of guest flow.
-                // If PIN is required, we still need to enter it.
+                // If not PIN required, go
+                // If PIN is required, we still need to enter it (stay on page)
                 if (event.join_mode !== 'pin') {
                     router.push(`/event/${event.id}`);
                 }
-                // If PIN is required, staying on page is fine, user is now logged in as Key/Google user.
             }
         } catch (err) {
             console.error("OAuth failed", err);
