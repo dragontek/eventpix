@@ -27,7 +27,7 @@ export default function Home() {
   // New Event State
   const [newEventName, setNewEventName] = useState('');
   const [newEventCode, setNewEventCode] = useState('');
-  const [newVisibility, setNewVisibility] = useState('public');
+  const [newVisibility, setNewVisibility] = useState('private');
   const [newJoinMode, setNewJoinMode] = useState('open');
   const [newPin, setNewPin] = useState('');
   const [creating, setCreating] = useState(false);
