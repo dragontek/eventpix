@@ -117,7 +117,7 @@ export default function SlideshowPage() {
             {prevPhoto && prevPhoto.file && (
                 <div className="absolute inset-0 flex items-center justify-center z-0">
                     <img
-                        src={pb.files.getUrl(prevPhoto, prevPhoto.file)}
+                        src={pb.files.getURL(prevPhoto, prevPhoto.file)}
                         alt=""
                         className="w-full h-full object-contain"
                     />
@@ -129,7 +129,7 @@ export default function SlideshowPage() {
                 <div className="relative w-full h-full flex items-center justify-center">
                     <img
                         key={currentPhoto.id} // Key forces remount and triggers animation
-                        src={pb.files.getUrl(currentPhoto, currentPhoto.file)}
+                        src={pb.files.getURL(currentPhoto, currentPhoto.file)}
                         alt={currentPhoto.caption || "Event Photo"}
                         className="w-full h-full object-contain animate-fade-in"
                     />

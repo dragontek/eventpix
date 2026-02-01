@@ -22,7 +22,7 @@ export default function PhotoCard({ photo, currentUserId, eventOwnerId }: PhotoC
     // }, [showControls]);
 
     const { enqueueSnackbar } = useSnackbar();
-    const url = pb.files.getUrl(photo, photo.file);
+    const url = pb.files.getURL(photo, photo.file);
     const isOwner = currentUserId && currentUserId === photo.owner;
     const ownerName = isOwner ? 'You' : (photo.expand?.owner?.name || photo.expand?.owner?.email || 'Guest');
 

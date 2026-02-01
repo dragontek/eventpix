@@ -77,7 +77,7 @@ export default function UserProfile() {
             >
                 {user.avatar ? (
                     <img
-                        src={pb.files.getUrl(user, user.avatar)}
+                        src={pb.files.getURL(user, user.avatar)}
                         alt={user.name}
                         className="w-full h-full object-cover"
                     />
