@@ -382,7 +382,7 @@ export default function JoinPage() {
                     {verifying ? 'Verifying...' : (authStatus === 'loading' ? 'Connecting...' : (authStatus === 'success' ? 'Join Event' : 'Continue as Guest'))}
                 </button>
 
-                {(authProviders || []).length > 0 && (
+                {(authProviders || []).length > 0 && event.join_mode !== 'pin' && (
                     <div className="space-y-3 pt-2">
                         <div className="relative flex py-1 items-center">
                             <div className="flex-grow border-t border-gray-800"></div>
