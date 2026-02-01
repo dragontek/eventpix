@@ -15,6 +15,7 @@ export default function JoinPage() {
 
     const [authStatus, setAuthStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [authError, setAuthError] = useState('');
+    const authenticating = useRef(false);
 
     const authenticateAnonymously = async () => {
         // If already valid, verify it's still good with the server
@@ -40,8 +41,9 @@ export default function JoinPage() {
         }
 
         // Prevent multiple simultaneous attempts
-        if (authStatus === 'loading') return;
+        if (authStatus === 'loading' || authenticating.current) return;
 
+        authenticating.current = true;
         setAuthStatus('loading');
         setAuthError('');
         console.log("Starting anonymous auth...");
@@ -64,6 +66,7 @@ export default function JoinPage() {
             console.error("Auth failed:", err);
             setAuthStatus('error');
             setAuthError("Failed to create guest session. Please try again.");
+            authenticating.current = false;
         }
     };
 
