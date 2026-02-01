@@ -6,9 +6,8 @@ import { pb, isAuthenticated, getUser } from '@/lib/pocketbase';
 import { useSnackbar } from 'notistack';
 import PhotoCard from '@/components/PhotoCard';
 import UserProfile from '@/components/UserProfile';
-
+import CameraModal from '@/components/CameraModal';
 import QRCode from "react-qr-code";
-
 
 export default function EventPage() {
     const params = useParams();
@@ -19,8 +18,8 @@ export default function EventPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const cameraInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
+    const [showCamera, setShowCamera] = useState(false);
 
     // Edit State
     const [isEditingEvent, setIsEditingEvent] = useState(false);
@@ -41,7 +40,14 @@ export default function EventPage() {
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
+        await uploadPhoto(file);
+    };
 
+    const handleCameraCapture = async (file: File) => {
+        await uploadPhoto(file);
+    };
+
+    const uploadPhoto = async (file: File) => {
         setUploading(true);
         try {
             const formData = new FormData();
@@ -66,7 +72,6 @@ export default function EventPage() {
         } finally {
             setUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
-            if (cameraInputRef.current) cameraInputRef.current.value = '';
         }
     };
 
@@ -387,16 +392,8 @@ export default function EventPage() {
                 </button>
 
                 {/* Primary: Camera */}
-                <input
-                    type="file"
-                    ref={cameraInputRef}
-                    onChange={handleFileChange}
-                    className="hidden"
-                    accept="image/*"
-                    capture="environment"
-                />
                 <button
-                    onClick={() => cameraInputRef.current?.click()}
+                    onClick={() => setShowCamera(true)}
                     disabled={uploading}
                     className="bg-blue-600 hover:bg-blue-500 text-white rounded-full p-4 shadow-xl transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Take Photo"
@@ -411,6 +408,14 @@ export default function EventPage() {
                     )}
                 </button>
             </div>
+
+            {/* Camera Modal */}
+            {showCamera && (
+                <CameraModal
+                    onCapture={handleCameraCapture}
+                    onClose={() => setShowCamera(false)}
+                />
+            )}
 
             {/* Edit Modal */}
             {isEditingEvent && (
