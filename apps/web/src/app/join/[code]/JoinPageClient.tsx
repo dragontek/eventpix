@@ -182,7 +182,7 @@ export default function JoinPage() {
             if (pb.authStore.isValid && pb.authStore.model) {
                 try {
                     console.log("Attempting to link social account to guest session...");
-                    const authData = await pb.collection('users').linkWithOAuth2({ provider: providerName });
+                    const authData = await (pb.collection('users') as any).linkWithOAuth2({ provider: providerName });
 
                     // Optional: Update profile name from social if still "Guest ..."
                     const meta = authData.meta;
