@@ -7,8 +7,6 @@ import { pb, isAuthenticated, getUser } from '@/lib/pocketbase';
 
 import UserProfile from '@/components/UserProfile';
 
-import UserProfile from '@/components/UserProfile';
-
 export default function Home() {
   const router = useRouter();
   const { enqueueSnackbar } = useSnackbar();
