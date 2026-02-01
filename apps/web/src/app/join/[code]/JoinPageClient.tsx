@@ -97,6 +97,14 @@ export default function JoinPage() {
         if (code) init();
     }, [code]);
 
+    // Auto-redirect if already authenticated and no PIN required
+    useEffect(() => {
+        if (authStatus === 'success' && event && event.join_mode !== 'pin') {
+            console.log("Already authenticated, redirecting to event...");
+            router.push(`/event/${event.id}`);
+        }
+    }, [authStatus, event, router]);
+
     const [authProviders, setAuthProviders] = useState<any[]>([]);
 
     useEffect(() => {
