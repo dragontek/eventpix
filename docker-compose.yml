@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       args:
-        VITE_POCKETBASE_URL: "http://localhost:8090"
+        VITE_POCKETBASE_URL: ${VITE_POCKETBASE_URL:-http://localhost:8090}
     # ports:
     #   - "8090:8090"
     volumes:
@@ -16,11 +16,11 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        NEXT_PUBLIC_POCKETBASE_URL: "http://localhost:8090"
+        NEXT_PUBLIC_POCKETBASE_URL: ${NEXT_PUBLIC_POCKETBASE_URL:-http://localhost:8090}
     # ports:
     #   - "3000:3000"
     environment:
-      - NEXT_PUBLIC_POCKETBASE_URL=http://localhost:8090
+      - NEXT_PUBLIC_POCKETBASE_URL=${NEXT_PUBLIC_POCKETBASE_URL:-http://localhost:8090}
     depends_on:
       - backend
     restart: unless-stopped
