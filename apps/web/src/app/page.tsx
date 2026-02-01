@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useSnackbar } from 'notistack';
 import { pb, isAuthenticated, getUser } from '@/lib/pocketbase';
 
+import UserProfile from '@/components/UserProfile';
+
+import UserProfile from '@/components/UserProfile';
+
 export default function Home() {
   const router = useRouter();
   const { enqueueSnackbar } = useSnackbar();
@@ -34,11 +38,22 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Reactive User State
+  const [currentUser, setCurrentUser] = useState(getUser());
+
+  useEffect(() => {
+    return pb.authStore.onChange(() => {
+      setCurrentUser(getUser());
+    });
+  }, []);
+
   // Initial Auth Check and Providers
   useEffect(() => {
-    // Check Auth
+    // Check Auth - if logged in as regular user, default to dashboard?
+    // Or just stay on guest mode?
     if (isAuthenticated()) {
       const user = getUser();
+      // Only auto-switch to dashboard if we are NOT a guest account
       if (user && user.email && !user.email.startsWith('guest_')) {
         setMode('host');
         setSubMode('dashboard');
@@ -64,6 +79,15 @@ export default function Home() {
       setPublicEvents(res.items);
     }).catch(err => console.error("Failed to fetch public events", err));
   }, []);
+
+  // ... (fetchMyEvents and handlers remain the same) ...
+  // But wait, I need to include them in the replace call if I am replacing the top part of the file.
+  // The Instruction says: "Add UserProfile to header...".
+  // I will use `replace_file_content` to swap the imports and the top part of the component logic.
+  // Then another call to swap the JSX header.
+
+  // Let's do imports first + component start.
+
 
   const fetchMyEvents = async () => {
     try {
@@ -171,12 +195,21 @@ export default function Home() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-black text-white p-4">
       {/* Top Right Toggle */}
-      <div className="absolute top-4 right-4 flex gap-2">
-        {mode === 'host' && subMode === 'dashboard' && (
-          <button onClick={handleLogout} className="text-sm text-gray-400 hover:text-white px-3 py-1">
-            Sign Out
+      <div className="absolute top-4 right-4 flex gap-4 items-center">
+        {currentUser ? (
+          <UserProfile />
+        ) : (
+          <button
+            onClick={() => {
+              setMode('host');
+              setSubMode('login');
+            }}
+            className="text-sm font-bold text-gray-300 hover:text-white transition"
+          >
+            Sign In
           </button>
         )}
+
         <div className="bg-gray-900 p-1 rounded-lg flex text-xs font-medium">
           <button
             onClick={() => setMode('guest')}
