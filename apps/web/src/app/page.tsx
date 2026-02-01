@@ -212,24 +212,25 @@ export default function Home() {
           </button>
         )}
 
-        <div className="bg-gray-900 p-1 rounded-lg flex text-xs font-medium">
-          <button
-            onClick={() => setMode('guest')}
-            className={`px-3 py-1.5 rounded-md transition ${mode === 'guest' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
-          >
-            Guest
-          </button>
-          <button
-            onClick={() => setMode('host')}
-            className={`px-3 py-1.5 rounded-md transition ${mode === 'host' ? 'bg-purple-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
-          >
-            Host
-          </button>
-        </div>
       </div>
 
       <main className="flex flex-col items-center gap-8 text-center max-w-md w-full">
         <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-br from-white to-gray-500 bg-clip-text text-transparent">EventPix</h1>
+
+        <div className="bg-gray-900 p-1 rounded-lg flex text-sm font-medium">
+          <button
+            onClick={() => setMode('guest')}
+            className={`px-4 py-2 rounded-md transition ${mode === 'guest' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+          >
+            I'm a Guest
+          </button>
+          <button
+            onClick={() => setMode('host')}
+            className={`px-4 py-2 rounded-md transition ${mode === 'host' ? 'bg-purple-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+          >
+            I'm a Host
+          </button>
+        </div>
 
         {mode === 'guest' ? (
           <>
