@@ -1,0 +1,39 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+dist
+.next
+out
+build
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backend (PocketBase)
+backend/pocketbase
+backend/pb_data
+!backend/pb_migrations
+
+# IDEs
+.vscode
+.idea
+*.swp
+*.swo
+
+# Temporary scripts (optional, but maybe keep them?)
+# inspect_*.ts
+# test_*.ts
