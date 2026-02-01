@@ -17,12 +17,9 @@ export default function JoinPage() {
     const [authError, setAuthError] = useState('');
     const authenticating = useRef(false);
 
-    const authenticateAnonymously = async () => {
-        // If already valid, verify it's still good with the server
+    const checkExistingAuth = async () => {
         if (pb.authStore.isValid) {
             try {
-                // If we are already loading, don't trigger again, but this check is lower down.
-                // We should probably just do a quick verify.
                 console.log("Verifying existing session...");
                 await pb.collection('users').authRefresh();
 
@@ -32,16 +29,16 @@ export default function JoinPage() {
 
                 console.log("Existing session valid. User:", pb.authStore.model.id);
                 setAuthStatus('success');
-                return;
             } catch (err) {
-                console.warn("Existing session invalid or expired. Creating new guest session.", err);
+                console.warn("Existing session invalid or expired.", err);
                 pb.authStore.clear();
-                // Proceed to create new user below
+                setAuthStatus('idle');
             }
         }
+    };
 
-        // Prevent multiple simultaneous attempts
-        if (authStatus === 'loading' || authenticating.current) return;
+    const createGuestSession = async () => {
+        if (authStatus === 'loading' || authenticating.current) return false;
 
         authenticating.current = true;
         setAuthStatus('loading');
@@ -62,17 +59,20 @@ export default function JoinPage() {
             await pb.collection('users').authWithPassword(email, password);
             console.log("Auth successful:", pb.authStore.model?.id);
             setAuthStatus('success');
+            return true;
         } catch (err: any) {
             console.error("Auth failed:", err);
             setAuthStatus('error');
             setAuthError("Failed to create guest session. Please try again.");
             authenticating.current = false;
+            return false;
         }
     };
 
     useEffect(() => {
         const init = async () => {
-            await authenticateAnonymously();
+            // Check auth ONCE on mount
+            await checkExistingAuth();
 
             try {
                 // Find event by code (case-insensitive by convention)
@@ -274,7 +274,7 @@ export default function JoinPage() {
                     <div className="bg-red-900/20 border border-red-900 p-3 rounded-lg text-red-500 text-sm mb-4">
                         <p className="mb-2">{authError}</p>
                         <button
-                            onClick={authenticateAnonymously}
+                            onClick={createGuestSession}
                             className="text-white underline text-xs font-bold"
                         >
                             Retry Connection
@@ -283,11 +283,22 @@ export default function JoinPage() {
                 )}
 
                 <button
-                    onClick={handleJoin}
-                    disabled={verifying || (authStatus !== 'success' && !pb.authStore.isValid)}
+                    onClick={async () => {
+                        if (authStatus === 'success') {
+                            handleJoin();
+                        } else {
+                            const success = await createGuestSession();
+                            if (success) {
+                                // Small delay to ensure state update propagates if needed, 
+                                // though we just awaited it. handleJoin checks authStore.
+                                handleJoin();
+                            }
+                        }
+                    }}
+                    disabled={verifying || authStatus === 'loading'}
                     className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-lg transition shadow-lg shadow-blue-900/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                    {verifying ? 'Verifying...' : (authStatus === 'loading' ? 'Connecting...' : 'Continue as Guest')}
+                    {verifying ? 'Verifying...' : (authStatus === 'loading' ? 'Connecting...' : (authStatus === 'success' ? 'Join Event' : 'Continue as Guest'))}
                 </button>
 
                 {(authProviders || []).length > 0 && (
