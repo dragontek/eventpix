@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSnackbar } from 'notistack';
 import { pb, isAuthenticated, getUser } from '@/lib/pocketbase';
 
 export default function Home() {
   const router = useRouter();
+  const { enqueueSnackbar } = useSnackbar();
 
   // View State
   const [mode, setMode] = useState<'guest' | 'host'>('guest');
@@ -16,22 +18,26 @@ export default function Home() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [myEvents, setMyEvents] = useState<any[]>([]);
+  const [publicEvents, setPublicEvents] = useState<any[]>([]);
+  const [authProviders, setAuthProviders] = useState<any[]>([]);
+  const [passwordEnabled, setPasswordEnabled] = useState(true);
 
   // New Event State
   const [newEventName, setNewEventName] = useState('');
   const [newEventCode, setNewEventCode] = useState('');
   const [newVisibility, setNewVisibility] = useState('public');
   const [newJoinMode, setNewJoinMode] = useState('open');
+  const [newPin, setNewPin] = useState('');
   const [creating, setCreating] = useState(false);
 
   // Status State
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Initial Auth Check
+  // Initial Auth Check and Providers
   useEffect(() => {
+    // Check Auth
     if (isAuthenticated()) {
-      // If we have a logged in user who actually has an email/password (not guest), default to host dashboard
       const user = getUser();
       if (user && user.email && !user.email.startsWith('guest_')) {
         setMode('host');
@@ -39,6 +45,24 @@ export default function Home() {
         fetchMyEvents();
       }
     }
+
+    // Fetch Auth Providers
+    pb.collection('users').listAuthMethods().then((methods) => {
+      const providers = (methods as any).authProviders || (methods as any).oauth2?.providers || [];
+      const passEnabled = (methods as any).password?.enabled ?? true;
+      setAuthProviders(providers);
+      setPasswordEnabled(passEnabled);
+    }).catch(err => {
+      console.error("Auth Methods Error:", err);
+    });
+
+    // Fetch Public Events
+    pb.collection('events').getList(1, 10, {
+      filter: 'visibility = "public"',
+      sort: '-created'
+    }).then(res => {
+      setPublicEvents(res.items);
+    }).catch(err => console.error("Failed to fetch public events", err));
   }, []);
 
   const fetchMyEvents = async () => {
@@ -70,10 +94,37 @@ export default function Home() {
     setError('');
     try {
       await pb.collection('users').authWithPassword(email, password);
-      setSubMode('dashboard');
-      fetchMyEvents();
+      // Ensure we have correct user data
+      const user = getUser();
+      if (user) {
+        setSubMode('dashboard');
+        fetchMyEvents();
+      }
     } catch (err) {
       setError("Invalid email or password");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOAuthLogin = async (providerName: string) => {
+    setLoading(true);
+    console.log("Starting OAuth login for:", providerName);
+    try {
+      const authData = await pb.collection('users').authWithOAuth2({
+        provider: providerName
+      });
+      console.log("OAuth Success:", authData);
+
+      const user = getUser();
+      if (user) {
+        setSubMode('dashboard');
+        fetchMyEvents();
+      }
+    } catch (err: any) {
+      console.error("OAuth failed full error:", err);
+      console.error("Original error:", err?.originalError);
+      setError(`Social login failed: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -91,16 +142,18 @@ export default function Home() {
         date: new Date().toISOString(),
         approval_required: false,
         visibility: newVisibility,
-        join_mode: newJoinMode
+        join_mode: newJoinMode,
+        pin: newJoinMode === 'pin' ? newPin : ''
       });
       // Refresh list and go back
       await fetchMyEvents();
       setSubMode('dashboard');
       setNewEventName('');
       setNewEventCode('');
-    } catch (err: any) {
+      setNewPin('');
+    } catch (err) {
       console.error(err);
-      alert("Failed to create event. Code might be taken.");
+      enqueueSnackbar("Failed to create event. Code might be taken.", { variant: 'error' });
     } finally {
       setCreating(false);
     }
@@ -161,42 +214,141 @@ export default function Home() {
                 Join Event
               </button>
             </form>
+
+            <div className="w-full mt-12 mb-8">
+              <div className="relative flex py-2 items-center mb-6">
+                <div className="flex-grow border-t border-gray-800"></div>
+                <span className="flex-shrink-0 mx-4 text-gray-500 text-xs uppercase">Or Browse Public Events</span>
+                <div className="flex-grow border-t border-gray-800"></div>
+              </div>
+
+              <div className="grid gap-4 w-full">
+                {publicEvents.map(event => (
+                  <div
+                    key={event.id}
+                    onClick={() => router.push(`/event/${event.id}`)}
+                    className="bg-gray-900/50 hover:bg-gray-800 border border-gray-800 rounded-xl p-4 cursor-pointer transition text-left group"
+                  >
+                    <h3 className="font-bold text-lg group-hover:text-blue-400 transition-colors">{event.name}</h3>
+                    <div className="flex justify-between mt-2 text-sm text-gray-500">
+                      <span>{new Date(event.date).toLocaleDateString()}</span>
+                      <span className="flex items-center gap-1">
+                        Public
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {publicEvents.length === 0 && !loading && (
+                  <div className="text-gray-600 text-sm">No public events found.</div>
+                )}
+              </div>
+            </div>
           </>
         ) : (
           // HOST MODE
           <div className="w-full">
+            {subMode === 'login' && !passwordEnabled && authProviders.length === 0 && (
+              <div className="text-center p-4 bg-gray-900 rounded">
+                <p>No login methods available.</p>
+              </div>
+            )}
+
             {subMode === 'login' && (
-              <form onSubmit={handleLogin} className="space-y-4 text-left">
-                <h2 className="text-xl font-semibold text-center mb-6">Host Login</h2>
-                {error && <div className="text-red-500 text-sm text-center bg-red-900/20 p-2 rounded">{error}</div>}
-                <div>
-                  <label className="text-xs text-gray-400 block mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    className="w-full bg-gray-900 border border-gray-800 rounded p-3 focus:outline-none focus:border-purple-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 block mb-1">Password</label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    className="w-full bg-gray-900 border border-gray-800 rounded p-3 focus:outline-none focus:border-purple-500"
-                    required
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 px-8 rounded-lg transition mt-4 disabled:opacity-50"
-                >
-                  {loading ? 'Signing in...' : 'Sign In'}
-                </button>
-              </form>
+              <div className="w-full">
+                {/* Social Login Only Container if Password Disabled, or Mix */}
+
+                {passwordEnabled && (
+                  <form onSubmit={handleLogin} className="space-y-4 text-left">
+                    <h2 className="text-xl font-semibold text-center mb-6">Host Login</h2>
+                    {error && <div className="text-red-500 text-sm text-center bg-red-900/20 p-2 rounded">{error}</div>}
+                    <div>
+                      <label className="text-xs text-gray-400 block mb-1">Email</label>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        className="w-full bg-gray-900 border border-gray-800 rounded p-3 focus:outline-none focus:border-purple-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 block mb-1">Password</label>
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        className="w-full bg-gray-900 border border-gray-800 rounded p-3 focus:outline-none focus:border-purple-500"
+                        required
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 px-8 rounded-lg transition mt-4 disabled:opacity-50"
+                    >
+                      {loading ? 'Signing in...' : 'Sign In'}
+                    </button>
+                  </form>
+                )}
+
+                {/* Social Login */}
+                {(authProviders || []).length > 0 && (
+                  <div className={passwordEnabled ? "mt-4" : "mt-0"}>
+                    {passwordEnabled && (
+                      <div className="relative flex py-2 items-center">
+                        <div className="flex-grow border-t border-gray-800"></div>
+                        <span className="flex-shrink-0 mx-4 text-gray-500 text-xs uppercase">Or</span>
+                        <div className="flex-grow border-t border-gray-800"></div>
+                      </div>
+                    )}
+
+                    {!passwordEnabled && <h2 className="text-xl font-semibold text-center mb-6">Host Login</h2>}
+
+                    {authProviders.map((p) => {
+                      const isGoogle = p.name === 'google';
+                      const isApple = p.name === 'apple';
+
+                      let buttonClass = "w-full font-bold py-3 px-8 rounded-lg transition mt-3 flex items-center justify-center gap-2 ";
+                      if (isGoogle) {
+                        buttonClass += "bg-white text-gray-900 hover:bg-gray-100";
+                      } else if (isApple) {
+                        buttonClass += "bg-black text-white border border-gray-700 hover:bg-gray-900";
+                      } else {
+                        buttonClass += "bg-gray-800 text-white hover:bg-gray-700";
+                      }
+
+                      return (
+                        <button
+                          key={p.name}
+                          type="button"
+                          onClick={() => handleOAuthLogin(p.name)}
+                          className={buttonClass}
+                        >
+                          {isGoogle && (
+                            <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                            </svg>
+                          )}
+                          {isApple && (
+                            <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="currentColor" d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.74 1.18 0 2.21-1.64 3.57-1.14 3.16.89 5.37 8.35 2.15 13.37zM12.93 2.56C13.68 1.49 15.68.61 16.92 1c.14 1.83-1.66 3.79-3.4 3.91-.95.03-3.23-1.07-2.3-2.35z" /></svg>
+                          )}
+                          {!isGoogle && !isApple && (
+                            // Generic icon
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
+                          )}
+                          Sign in with {p.name.charAt(0).toUpperCase() + p.name.slice(1)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             )}
 
             {subMode === 'dashboard' && (
@@ -297,6 +449,42 @@ export default function Home() {
                     </select>
                   </div>
                 </div>
+
+                {/* Visibility Alerts */}
+                {newVisibility === 'public' && (
+                  <div className="flex items-start gap-2 bg-orange-900/30 border border-orange-900/50 p-3 rounded-lg text-xs text-orange-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <span>Warning: This event will be visible to anyone visiting the site.</span>
+                  </div>
+                )}
+                {newVisibility === 'private' && (
+                  <div className="flex items-start gap-2 bg-blue-900/30 border border-blue-900/50 p-3 rounded-lg text-xs text-blue-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="16" x2="12" y2="12"></line>
+                      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                    <span>Guests will need the Event Code above.</span>
+                  </div>
+                )}
+
+                {newJoinMode === 'pin' && (
+                  <div className="animate-fade-in">
+                    <label className="text-xs text-gray-400 block mb-1">Set PIN Code</label>
+                    <input
+                      type="text"
+                      value={newPin}
+                      onChange={e => setNewPin(e.target.value)}
+                      className="w-full bg-gray-900 border border-gray-800 rounded p-3 focus:outline-none focus:border-purple-500 tracking-widest"
+                      placeholder="1234"
+                      required
+                    />
+                  </div>
+                )}
 
                 <button
                   type="submit"

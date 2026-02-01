@@ -1,7 +1,7 @@
 import PocketBase from 'pocketbase';
 
 // Use environment variable or default to local backend
-const PB_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'http://127.0.0.1:8090';
+const PB_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'http://localhost:8090';
 
 export const pb = new PocketBase(PB_URL);
 pb.autoCancellation(false);

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Table, Title, Button, Group, Badge, ActionIcon, Loader, Center } from '@mantine/core';
+import { Table, Title, Button, Group, Badge, ActionIcon, Loader, Center, Tooltip } from '@mantine/core';
 import { IconEye, IconTrash, IconPlus } from '@tabler/icons-react';
 import { useData } from '../providers/DataProvider';
 import type { Event } from '../providers/types';
@@ -43,12 +43,40 @@ export default function Events() {
         }
     };
 
+
+
     const rows = events.map((event) => (
         <Table.Tr key={event.id}>
             <Table.Td>{event.name}</Table.Td>
             <Table.Td>{event.code}</Table.Td>
             <Table.Td>
-                <Badge color={event.visibility === 'public' ? 'green' : 'blue'}>{event.visibility}</Badge>
+                <Tooltip label={
+                    event.visibility === 'public' ? 'Visible via search & landing page' :
+                        event.visibility === 'unlisted' ? 'Accessible only via direct link' :
+                            'Hidden from all lists'
+                }>
+                    <Badge
+                        color={
+                            event.visibility === 'public' ? 'green' :
+                                event.visibility === 'unlisted' ? 'gray' : 'blue'
+                        }
+                        style={{ cursor: 'help' }}
+                    >
+                        {event.visibility}
+                    </Badge>
+                </Tooltip>
+            </Table.Td>
+            <Table.Td>{event.photoCount || 0}</Table.Td>
+            <Table.Td>
+                <Tooltip label={
+                    event.join_mode === 'open' ? 'Anyone can enter' :
+                        event.join_mode === 'pin' ? 'Requires PIN code' :
+                            'Restricted to invited emails'
+                }>
+                    <Badge variant="outline" color="gray" style={{ cursor: 'help' }}>
+                        {event.join_mode?.replace('_', ' ')}
+                    </Badge>
+                </Tooltip>
             </Table.Td>
             <Table.Td>{new Date(event.created).toLocaleDateString()}</Table.Td>
             <Table.Td>
@@ -79,6 +107,8 @@ export default function Events() {
                         <Table.Th>Name</Table.Th>
                         <Table.Th>Code</Table.Th>
                         <Table.Th>Visibility</Table.Th>
+                        <Table.Th>Photos</Table.Th>
+                        <Table.Th>Join Mode</Table.Th>
                         <Table.Th>Created</Table.Th>
                         <Table.Th>Actions</Table.Th>
                     </Table.Tr>

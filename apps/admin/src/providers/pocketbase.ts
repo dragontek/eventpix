@@ -1,7 +1,7 @@
 import PocketBase from 'pocketbase';
 import type { DataProvider, Event, Photo, RealtimeEvent, User } from './types';
 
-const PB_URL = 'http://127.0.0.1:8090'; // TODO: Env var
+const PB_URL = '/'; // Use proxy in dev, or relative path in prod
 
 export class PocketBaseProvider implements DataProvider {
     private pb: PocketBase;
@@ -14,6 +14,14 @@ export class PocketBaseProvider implements DataProvider {
     // --- Auth ---
     async login(email: string, pass: string): Promise<void> {
         await this.pb.collection('users').authWithPassword(email, pass);
+    }
+
+    async listAuthMethods(): Promise<any> {
+        return await this.pb.collection('users').listAuthMethods();
+    }
+
+    async authWithOAuth2(provider: string): Promise<void> {
+        await this.pb.collection('users').authWithOAuth2({ provider });
     }
 
     logout(): void {
@@ -47,6 +55,10 @@ export class PocketBaseProvider implements DataProvider {
         return await this.pb.collection('events').create(data);
     }
 
+    async updateEvent(id: string, data: Partial<Event>): Promise<Event> {
+        return await this.pb.collection('events').update(id, data);
+    }
+
     async deleteEvent(id: string): Promise<void> {
         await this.pb.collection('events').delete(id);
     }
@@ -60,6 +72,14 @@ export class PocketBaseProvider implements DataProvider {
         });
     }
 
+    async listEventPhotos(eventId: string): Promise<Photo[]> {
+        return await this.pb.collection('photos').getFullList({
+            filter: `event = "${eventId}"`,
+            sort: '-created',
+            expand: 'owner',
+        });
+    }
+
     async listApprovedPhotos(eventId: string): Promise<Photo[]> {
         return await this.pb.collection('photos').getFullList({
             filter: `event = "${eventId}" && status = "approved"`,
@@ -69,6 +89,10 @@ export class PocketBaseProvider implements DataProvider {
 
     async updatePhotoStatus(id: string, status: Photo['status']): Promise<void> {
         await this.pb.collection('photos').update(id, { status });
+    }
+
+    async deletePhoto(id: string): Promise<void> {
+        await this.pb.collection('photos').delete(id);
     }
 
     getPhotoUrl(photo: Photo): string {
@@ -86,6 +110,23 @@ export class PocketBaseProvider implements DataProvider {
 
         return () => {
             unsubPromise.then(unsub => unsub());
+        };
+    }
+    // --- Stats ---
+    async getStats(): Promise<import('./types').DashboardStats> {
+        // Parallel requests for efficiency
+        const [events, photos, users, pending] = await Promise.all([
+            this.pb.collection('events').getList(1, 1, { skipTotal: false }),
+            this.pb.collection('photos').getList(1, 1, { skipTotal: false }),
+            this.pb.collection('users').getList(1, 1, { skipTotal: false }),
+            this.pb.collection('photos').getList(1, 1, { filter: 'status = "pending"', skipTotal: false }),
+        ]);
+
+        return {
+            totalEvents: events.totalItems,
+            totalPhotos: photos.totalItems,
+            totalUsers: users.totalItems,
+            pendingPhotos: pending.totalItems,
         };
     }
 }

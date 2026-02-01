@@ -11,9 +11,11 @@ import Login from './pages/Login';
 import { useAuth } from './providers/AuthProvider';
 import { Navigate, Outlet } from 'react-router-dom';
 
-function Dashboard() {
-  return <Text>Dashboard Content</Text>;
-}
+import Dashboard from './pages/Dashboard';
+
+// function Dashboard() {
+//   return <Text>Dashboard Content</Text>;
+// }
 
 function RequireAuth() {
   const { isAuth } = useAuth();

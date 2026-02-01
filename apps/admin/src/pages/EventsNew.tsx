@@ -57,7 +57,7 @@ export default function EventsNew() {
                 />
 
                 <TextInput
-                    label="Join Code"
+                    label="Event Code"
                     placeholder="WEDDING2024"
                     description="Unique code for guests to join"
                     required
