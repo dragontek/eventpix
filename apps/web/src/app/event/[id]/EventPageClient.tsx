@@ -71,13 +71,6 @@ export default function EventPage() {
     // Restoring missing fetch logic
     useEffect(() => {
         const loadEvent = async () => {
-            console.log("EventPage: Loading event...", id);
-            console.log("EventPage: Auth State:", {
-                isValid: pb.authStore.isValid,
-                model: pb.authStore.model,
-                token: pb.authStore.token?.substring(0, 10) + "..."
-            });
-
             try {
                 // Fetch event
                 const eventRecord = await pb.collection('events').getOne(id);
