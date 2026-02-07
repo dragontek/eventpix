@@ -81,28 +81,21 @@ export default function EventPage({ id: propId }: { id?: string }) {
             try {
                 // Fetch event
                 const eventRecord = await pb.collection('events').getOne(id);
-                setEvent(eventRecord);
-
-                setEditEventName(eventRecord.name);
-                setEditVisibility(eventRecord.visibility);
-                setEditJoinMode(eventRecord.join_mode);
-                setEditPin(eventRecord.pin || '');
+                // Do NOT set event state yet.
 
                 // Check Access Control
                 if (eventRecord.join_mode === 'invite_only') {
                     if (!isAuthenticated()) {
+                        setEvent(eventRecord); // Need event for restricted UI (shows name)
                         setLoading(false);
                         return; // Will show restricted UI
                     }
                     const user = getUser();
                     // Check if invited OR owner
-                    // Since specific rules might restrict reading the invitation list, we try to find *our* invitation.
-                    // Or check if we are owner.
                     if (eventRecord.owner === user?.id) {
                         // Owner always allowed
                     } else {
                         try {
-                            // Try to find an invitation for this email and event
                             const invites = await pb.collection('invitations').getList(1, 1, {
                                 filter: `event = "${id}" && email = "${user?.email}"`
                             });
@@ -127,9 +120,19 @@ export default function EventPage({ id: propId }: { id?: string }) {
                         // Redirect to Join Page with Code
                         console.log("PIN required, redirecting to join page...");
                         router.push(`/join/${eventRecord.code}`);
-                        return; // Stop loading here
+                        // Do NOT set event state.
+                        // Do NOT set loading to false.
+                        // allow redirect to happen while showing loading spinner
+                        return;
                     }
                 }
+
+                // If we got here, access is granted.
+                setEvent(eventRecord);
+                setEditEventName(eventRecord.name);
+                setEditVisibility(eventRecord.visibility);
+                setEditJoinMode(eventRecord.join_mode);
+                setEditPin(eventRecord.pin || '');
 
                 // Fetch photos
                 const photoRecords = await pb.collection('photos').getFullList({
@@ -138,6 +141,9 @@ export default function EventPage({ id: propId }: { id?: string }) {
                     expand: 'owner'
                 });
                 setPhotos(photoRecords);
+
+                // Update loading state only after everything is ready
+                setLoading(false);
 
                 // Subscribe to realtime updates
                 pb.collection('photos').subscribe('*', async function (e) {
@@ -170,25 +176,9 @@ export default function EventPage({ id: propId }: { id?: string }) {
                                 if (exists) {
                                     return prev.map(p => p.id === e.record.id ? { ...p, ...e.record } : p);
                                 } else {
-                                    // New approval coming in (treat like create)
-                                    // Ideally we expand it, but for speed we might just add it first or fetch.
-                                    // Let's fetch to be safe about owner details.
-                                    // Trigger a fetch separately? Or just add raw and let standard img load?
-                                    // We can't await inside this sync state update easily if we want to be atomic.
-                                    // So we'll trigger an async fetch outside.
                                     return prev; // Return prev, and let the async block below handle adding.
                                 }
                             });
-
-                            // Handle "Just Approved" case where we need to fetch expanded details
-                            const currentPhotos = photos; // Note: stale closure check might be tricky here.
-                            // Better approach: Check if we just ignored it above.
-                            // Actually, let's just do the async fetch for ALL updates to ensure expansion, 
-                            // but that's heavy.
-                            // Optimized: Check if we have it. If not, fetch & add.
-                            // If we have it, we updated it above with raw data (which might lose expanded owner if not careful).
-                            // Wait, e.record doesn't have expand. So if we blindly spread ...e.record over p, we keep p.expand!
-                            // So the above map is fine for preserving owner.
 
                             // Now for the "Add if missing" case:
                             try {
@@ -227,7 +217,6 @@ export default function EventPage({ id: propId }: { id?: string }) {
             } catch (err) {
                 console.error("Error loading event", err);
                 setEvent(null);
-            } finally {
                 setLoading(false);
             }
         };
