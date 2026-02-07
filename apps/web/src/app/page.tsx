@@ -6,6 +6,7 @@ import { useSnackbar } from 'notistack';
 import { pb, isAuthenticated, getUser } from '@/lib/pocketbase';
 
 import UserProfile from '@/components/UserProfile';
+import { InstallPWAButton } from '@/components/InstallPWAButton';
 
 export default function Home() {
   const router = useRouter();
@@ -199,6 +200,7 @@ export default function Home() {
       <div className="flex min-h-screen flex-col items-center justify-center p-4">
         {/* Top Right Toggle */}
         <div className="absolute top-4 right-4 flex gap-4 items-center z-50">
+          <InstallPWAButton />
           {currentUser ? (
             <UserProfile />
           ) : (
@@ -215,8 +217,17 @@ export default function Home() {
 
         </div>
 
+        <div className="fixed inset-0 -z-10">
+          <img
+            src="/backdrop-landscape.jpg"
+            className="absolute inset-0 w-full h-full object-cover"
+            alt="EventPix Background"
+          />
+          <div className="absolute inset-0 bg-black/70" />
+        </div>
+
         <main className="flex flex-col items-center gap-8 text-center max-w-md w-full relative z-10">
-          <h1 className="text-3xl font-bold tracking-tight text-white mb-8">EventPix</h1>
+          <img src="/logo-full.svg" alt="EventPix" className="h-24 w-auto mb-4" />
 
           <div className="relative flex p-1 bg-gray-900 rounded-full border border-gray-800 w-72 h-16">
             {/* Sliding Indicator */}
