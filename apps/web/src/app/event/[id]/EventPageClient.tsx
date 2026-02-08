@@ -42,6 +42,80 @@ export default function EventPage({ id: propId }: { id?: string }) {
     // Share State
     const [isSharing, setIsSharing] = useState(false);
 
+    // Slideshow / Full Screen State
+    const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [touchStart, setTouchStart] = useState<number | null>(null);
+    const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+    // Minimum swipe distance
+    const minSwipeDistance = 50;
+
+    const onTouchStart = (e: React.TouchEvent) => {
+        setTouchEnd(null);
+        setTouchStart(e.targetTouches[0].clientX);
+    };
+
+    const onTouchMove = (e: React.TouchEvent) => {
+        setTouchEnd(e.targetTouches[0].clientX);
+    };
+
+    const onTouchEnd = () => {
+        if (!touchStart || !touchEnd) return;
+        const distance = touchStart - touchEnd;
+        const isLeftSwipe = distance > minSwipeDistance;
+        const isRightSwipe = distance < -minSwipeDistance;
+
+        if (isLeftSwipe) {
+            handleNextPhoto();
+        } else if (isRightSwipe) {
+            handlePrevPhoto();
+        }
+    };
+
+    const handleNextPhoto = () => {
+        if (selectedPhotoIndex === null) return;
+        setSelectedPhotoIndex((prev) => (prev === null ? null : (prev + 1) % photos.length));
+    };
+
+    const handlePrevPhoto = () => {
+        if (selectedPhotoIndex === null) return;
+        setSelectedPhotoIndex((prev) => (prev === null ? null : (prev - 1 + photos.length) % photos.length));
+    };
+
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (isPlaying && selectedPhotoIndex !== null) {
+            interval = setInterval(() => {
+                handleNextPhoto();
+            }, 3000); // 3 seconds for slideshow
+        }
+        return () => clearInterval(interval);
+    }, [isPlaying, selectedPhotoIndex, photos.length]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (selectedPhotoIndex === null) return;
+
+            if (e.key === 'ArrowRight') {
+                handleNextPhoto();
+                setIsPlaying(false);
+            } else if (e.key === 'ArrowLeft') {
+                handlePrevPhoto();
+                setIsPlaying(false);
+            } else if (e.key === 'Escape') {
+                setSelectedPhotoIndex(null);
+                setIsPlaying(false);
+            } else if (e.key === ' ') {
+                e.preventDefault(); // Prevent scrolling
+                setIsPlaying(prev => !prev);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedPhotoIndex, photos.length]);
+
 
     const handleUploadClick = () => {
         fileInputRef.current?.click();
@@ -395,16 +469,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                         </svg>
                     </button>
-                    <button
-                        onClick={() => router.push(`/event/${id}/slideshow`)}
-                        className="text-gray-400 hover:text-white p-2"
-                        title="Start Slideshow"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    </button>
+
                     {isHost && (
                         <button
                             onClick={() => {
@@ -459,6 +524,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
                             photo={photo}
                             currentUserId={getUser()?.id}
                             eventOwnerId={event?.owner} // Assuming event owner is not expanded, just the ID
+                            onPhotoClick={() => setSelectedPhotoIndex(photos.indexOf(photo))}
                         />
                     ))}
                 </div>
@@ -721,6 +787,99 @@ export default function EventPage({ id: propId }: { id?: string }) {
                                 <p className="text-sm text-gray-500">Scan to join {event.name}</p>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+            {/* Full Screen Slideshow Overlay */}
+            {selectedPhotoIndex !== null && photos[selectedPhotoIndex] && (
+                <div className="fixed inset-0 z-50 bg-black flex flex-col justify-center items-center">
+                    {/* Main Image Container with Touch Events */}
+                    <div
+                        className="relative w-full h-full flex items-center justify-center p-4"
+                        onTouchStart={onTouchStart}
+                        onTouchMove={onTouchMove}
+                        onTouchEnd={onTouchEnd}
+                    >
+                        {/* Image */}
+                        <div className="relative w-full h-full max-w-7xl max-h-[85vh] flex items-center justify-center">
+                            <img
+                                key={photos[selectedPhotoIndex].id}
+                                src={pb.files.getURL(photos[selectedPhotoIndex], photos[selectedPhotoIndex].file)}
+                                alt={photos[selectedPhotoIndex].caption || "Event Photo"}
+                                className="max-w-full max-h-full object-contain animate-fade-in"
+                            />
+                        </div>
+
+                        {/* Top Controls */}
+                        <div className="absolute top-4 right-4 flex gap-4 z-20">
+                            <button
+                                onClick={() => setIsPlaying(!isPlaying)}
+                                className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md transition"
+                                title={isPlaying ? "Pause Slideshow" : "Play Slideshow"}
+                            >
+                                {isPlaying ? (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6" />
+                                    </svg>
+                                ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                    </svg>
+                                )}
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setIsPlaying(false);
+                                    setSelectedPhotoIndex(null);
+                                }}
+                                className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md transition"
+                                title="Close"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Navigation Arrows (Desktop) */}
+                        <button
+                            onClick={(e) => { e.stopPropagation(); handlePrevPhoto(); setIsPlaying(false); }}
+                            className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md transition hidden md:flex"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </button>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); handleNextPhoto(); setIsPlaying(false); }}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md transition hidden md:flex"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                        </button>
+
+                        {/* Bottom Info Overlay */}
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-6 pb-8 text-white z-10">
+                            <div className="max-w-3xl mx-auto">
+                                <h3 className="text-xl font-medium mb-1 line-clamp-2">{photos[selectedPhotoIndex].caption}</h3>
+                                <div className="flex justify-between items-end">
+                                    <p className="text-sm text-gray-300">
+                                        Uploaded by <span className="text-white font-medium">{photos[selectedPhotoIndex].expand?.owner?.name || photos[selectedPhotoIndex].expand?.owner?.email || 'Guest'}</span>
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        {new Date(photos[selectedPhotoIndex].created).toLocaleTimeString()} · {new Date(photos[selectedPhotoIndex].created).toLocaleDateString()}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Progress Bar (if playing) */}
+                        {isPlaying && (
+                            <div className="absolute top-0 left-0 right-0 h-1 bg-gray-800 z-30">
+                                <div className="h-full bg-blue-500 animate-[progress_3s_linear_infinite]" key={selectedPhotoIndex}></div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

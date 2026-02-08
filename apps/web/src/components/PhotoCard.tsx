@@ -13,7 +13,7 @@ interface PhotoCardProps {
     eventOwnerId?: string;
 }
 
-export default function PhotoCard({ photo, currentUserId, eventOwnerId }: PhotoCardProps) {
+export default function PhotoCard({ photo, currentUserId, eventOwnerId, onPhotoClick }: PhotoCardProps & { onPhotoClick?: () => void }) {
     // Debug permissions
     // console.log(`Photo ${ photo.id }: `, { isOwner, isHost, currentUserId, photoOwner: photo.owner, eventOwner: eventOwnerId });
     // Detailed debug for long press issue
@@ -36,9 +36,6 @@ export default function PhotoCard({ photo, currentUserId, eventOwnerId }: PhotoC
     // Manage animation classes
     const [animationClass, setAnimationClass] = useState("animate-fade-in");
     const [highlight, setHighlight] = useState(false); // Keep highlight state for flash effect
-
-    // Mobile Interaction State
-    const [showControls, setShowControls] = useState(false);
 
     // Remove fade-in after it completes so it doesn't conflict with flash or restart
     useEffect(() => {
@@ -145,13 +142,10 @@ export default function PhotoCard({ photo, currentUserId, eventOwnerId }: PhotoC
     return (
         <div className={finalClass}>
             <div
-                className="relative w-full"
+                className="relative w-full cursor-pointer"
                 onClick={() => {
-                    // Simple toggle on tap/click
-                    setShowControls(!showControls);
-                    if (!showControls) {
-                        setHighlight(true);
-                        setTimeout(() => setHighlight(false), 200);
+                    if (onPhotoClick) {
+                        onPhotoClick();
                     }
                 }}
             >
@@ -163,7 +157,8 @@ export default function PhotoCard({ photo, currentUserId, eventOwnerId }: PhotoC
                     loading="lazy"
                 />
 
-                <div className={`absolute top-2 right-2 flex gap-2 transition-opacity ${showControls ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                <div className="absolute top-2 right-2 flex gap-2">
+                    {/* Controls need to stop propagation so they don't trigger the photo click */}
                     {canEdit && !isEditing && (
                         <button
                             onClick={(e) => {
@@ -199,7 +194,10 @@ export default function PhotoCard({ photo, currentUserId, eventOwnerId }: PhotoC
                 {!isEditing && (
                     <div className="absolute bottom-2 right-2">
                         <button
-                            onClick={handleLike}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleLike();
+                            }}
                             className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-colors backdrop-blur-sm ${isLiked
                                 ? "bg-red-500/90 text-white"
                                 : "bg-black/40 text-white hover:bg-black/60"
@@ -215,7 +213,7 @@ export default function PhotoCard({ photo, currentUserId, eventOwnerId }: PhotoC
             </div>
 
             {/* Always show footer now that we have timestamp/user info */}
-            <div className="p-3">
+            <div className="p-3 relative">
                 {isEditing ? (
                     <div className="flex flex-col gap-2">
                         <textarea
