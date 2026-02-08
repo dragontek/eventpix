@@ -30,7 +30,7 @@ export default function Home() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [myEvents, setMyEvents] = useState<any[]>([]);
-  const [publicEvents, setPublicEvents] = useState<any[]>([]);
+  // const [publicEvents, setPublicEvents] = useState<any[]>([]); // Removed
   const [authProviders, setAuthProviders] = useState<any[]>([]);
   const [passwordEnabled, setPasswordEnabled] = useState(true);
 
@@ -62,6 +62,45 @@ export default function Home() {
       setCurrentUser(getUser());
     });
   }, []);
+
+  // Typing Effect State
+  const [typedText, setTypedText] = useState('');
+  const [wordIndex, setWordIndex] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const WORDS = [
+    'wedding',
+    'birthday party',
+    'family reunion',
+    'holiday party',
+    'baby shower',
+    'graduation',
+    'conference',
+    'company retreat',
+    'music festival',
+    'road trip'
+  ];
+
+  useEffect(() => {
+    const currentWord = WORDS[wordIndex % WORDS.length];
+    const typeSpeed = isDeleting ? 50 : 150;
+    const pauseTime = 2000;
+
+    const effect = setTimeout(() => {
+      if (!isDeleting && typedText === currentWord) {
+        // Finished typing word, wait then delete
+        setTimeout(() => setIsDeleting(true), pauseTime);
+      } else if (isDeleting && typedText === '') {
+        // Finished deleting, move to next word
+        setIsDeleting(false);
+        setWordIndex((prev) => prev + 1);
+      } else {
+        // Typing or Deleting
+        setTypedText(currentWord.substring(0, typedText.length + (isDeleting ? -1 : 1)));
+      }
+    }, isDeleting && typedText === currentWord ? pauseTime : typeSpeed);
+
+    return () => clearTimeout(effect);
+  }, [typedText, isDeleting, wordIndex]);
 
   // Background Rotation
   useEffect(() => {
@@ -95,13 +134,7 @@ export default function Home() {
       console.error("Auth Methods Error:", err);
     });
 
-    // Fetch Public Events
-    pb.collection('events').getList(1, 10, {
-      filter: 'visibility = "public"',
-      sort: '-created'
-    }).then(res => {
-      setPublicEvents(res.items);
-    }).catch(err => console.error("Failed to fetch public events", err));
+
   }, []);
 
   // ... (fetchMyEvents and handlers remain the same) ...
@@ -311,6 +344,16 @@ export default function Home() {
         <main className="flex flex-col items-center gap-8 text-center max-w-md w-full relative z-10">
           <img src="/logo-full.svg" alt="EventPix" className="h-24 w-auto mb-4" />
 
+          <div className="h-16 -mt-6 mb-2 flex flex-col justify-center">
+            <h1 className="text-xl md:text-2xl font-light text-gray-200">
+              Realtime photo sharing for your <br />
+              <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
+                {typedText}
+                <span className="animate-pulse">|</span>
+              </span>
+            </h1>
+          </div>
+
           <div className="relative flex p-1 bg-gray-900 rounded-full border border-gray-800 w-72 h-16">
             {/* Sliding Indicator */}
             <div
@@ -351,35 +394,15 @@ export default function Home() {
               </form>
 
               <div className="w-full mt-12 mb-8">
-                <div className="relative flex py-2 items-center mb-6">
-                  <div className="flex-grow border-t border-gray-800"></div>
-                  <span className="flex-shrink-0 mx-4 text-gray-500 text-xs uppercase">Or Browse Public Events</span>
-                  <div className="flex-grow border-t border-gray-800"></div>
-                </div>
-
-                <div className="grid gap-4 w-full">
-                  {publicEvents.map(event => (
-                    <div
-                      key={event.id}
-                      onClick={() => router.push(`/join/${event.code}`)}
-                      className="bg-gray-900 hover:bg-gray-800 border border-gray-800 rounded-lg p-4 cursor-pointer transition text-left group"
-                    >
-                      <h3 className="font-bold text-lg group-hover:text-blue-400 transition-colors">{event.name}</h3>
-                      <div className="flex justify-between mt-2 text-sm text-gray-500">
-                        <span>{new Date(event.start_date || event.date || event.created).toLocaleDateString()}</span>
-                        <span className="flex items-center gap-1">
-                          Public
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                  {publicEvents.length === 0 && !loading && (
-                    <div className="text-gray-600 text-sm">No public events found.</div>
-                  )}
-                </div>
+                <button
+                  onClick={() => router.push('/search')}
+                  className="w-full py-4 bg-gray-900/50 hover:bg-gray-900 border border-gray-800 text-gray-300 hover:text-white rounded-lg transition-all font-bold uppercase tracking-widest flex items-center justify-center gap-2 group backdrop-blur-sm"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  Search Public Events
+                </button>
               </div>
             </>
           ) : (
