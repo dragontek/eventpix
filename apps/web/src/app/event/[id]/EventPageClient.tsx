@@ -54,14 +54,20 @@ export default function EventPage({ id: propId }: { id?: string }) {
             formData.append('file', file);
             formData.append('event', id);
             const userId = getUser()?.id;
+            const isOwner = event?.owner && userId === event.owner;
+
             if (userId) {
                 formData.append('owner', userId);
             }
-            formData.append('status', event?.approval_required ? 'pending' : 'approved');
+
+            // Auto-approve if owner, otherwise check event settings
+            const status = (event?.approval_required && !isOwner) ? 'pending' : 'approved';
+            formData.append('status', status);
+
             console.log(formData);
             await pb.collection('photos').create(formData);
 
-            if (event?.approval_required) {
+            if (status === 'pending') {
                 enqueueSnackbar("Photo uploaded! Waiting for host approval.", { variant: 'info' });
             } else {
                 enqueueSnackbar("Photo uploaded successfully!", { variant: 'success' });
