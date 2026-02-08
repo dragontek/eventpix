@@ -96,8 +96,20 @@ export default function Home() {
     try {
       const user = getUser();
       if (!user) return;
+
+      // We need to fetch both owned events AND joined events
+      // Fetch user details to get latest joined_events list
+      const userRecord = await pb.collection('users').getOne(user.id);
+      const joinedIds = (userRecord.joined_events as string[]) || [];
+
+      let filter = `owner = "${user.id}"`;
+      if (joinedIds.length > 0) {
+        const joinedFilter = joinedIds.map(id => `id = "${id}"`).join(' || ');
+        filter = `(${filter}) || (${joinedFilter})`;
+      }
+
       const records = await pb.collection('events').getList(1, 50, {
-        filter: `owner = "${user.id}"`,
+        filter: filter,
         sort: '-created'
       });
       setMyEvents(records.items);
@@ -105,6 +117,33 @@ export default function Home() {
       console.error("Failed to fetch events", err);
       if (err.data) console.error("PB Error Data:", err.data);
       // alert("Fetch failed: " + JSON.stringify(err.data));
+    }
+  };
+
+  const transferGuestData = async (userId: string) => {
+    try {
+      const localJoinedEvents = JSON.parse(localStorage.getItem('joined_events') || '[]');
+      if (localJoinedEvents.length === 0) return;
+
+      const user = await pb.collection('users').getOne(userId);
+      // specific type cast or any for flexibility
+      const serverJoinedEvents = (user as any).joined_events || [];
+
+      // Merge unique
+      const newJoinedEvents = Array.from(new Set([...serverJoinedEvents, ...localJoinedEvents]));
+
+      // Only update if there's a difference
+      if (newJoinedEvents.length > serverJoinedEvents.length) {
+        await pb.collection('users').update(userId, {
+          joined_events: newJoinedEvents
+        });
+        console.log("Transferred guest events:", localJoinedEvents);
+        enqueueSnackbar("Synced guest events to your account.", { variant: 'success' });
+      }
+
+      // Optional: Clear local storage or keep it? Keeping it is safer for now.
+    } catch (err) {
+      console.error("Failed to transfer guest data", err);
     }
   };
 
@@ -124,6 +163,7 @@ export default function Home() {
       // Ensure we have correct user data
       const user = getUser();
       if (user) {
+        await transferGuestData(user.id);
         setSubMode('dashboard');
         fetchMyEvents();
       }
@@ -145,6 +185,7 @@ export default function Home() {
 
       const user = getUser();
       if (user) {
+        await transferGuestData(user.id);
         setSubMode('dashboard');
         fetchMyEvents();
       }

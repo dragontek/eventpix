@@ -38,46 +38,66 @@ export default function EventPage({ id: propId }: { id?: string }) {
     };
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        await uploadPhoto(file);
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        await uploadFiles(Array.from(files));
     };
 
     const handleCameraCapture = async (file: File) => {
-        await uploadPhoto(file);
+        await uploadFiles([file]);
     };
 
-    const uploadPhoto = async (file: File) => {
+    const uploadFiles = async (files: File[]) => {
         setUploading(true);
-        try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('event', id);
+        let successCount = 0;
+
+        // Notification for batch start if multiple
+        if (files.length > 1) {
+            enqueueSnackbar(`Uploading ${files.length} photos...`, { variant: 'info' });
+        }
+
+        for (const file of files) {
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('event', id);
+                const userId = getUser()?.id;
+                const isOwner = event?.owner && userId === event.owner;
+
+                if (userId) {
+                    formData.append('owner', userId);
+                }
+
+                // Auto-approve if owner, otherwise check event settings
+                const status = (event?.approval_required && !isOwner) ? 'pending' : 'approved';
+                formData.append('status', status);
+
+                await pb.collection('photos').create(formData);
+                successCount++;
+
+            } catch (err) {
+                console.error("Upload failed for file", file.name, err);
+            }
+        }
+
+        setUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+
+        if (successCount === 0) {
+            enqueueSnackbar("Upload failed.", { variant: 'error' });
+        } else if (successCount === files.length) {
+            const msg = files.length === 1 ? "Photo uploaded successfully!" : `${successCount} photos uploaded successfully!`;
+            enqueueSnackbar(msg, { variant: 'success' });
+
+            // Check if any need approval (heuristic: if not owner and approval required)
             const userId = getUser()?.id;
             const isOwner = event?.owner && userId === event.owner;
-
-            if (userId) {
-                formData.append('owner', userId);
+            if (event?.approval_required && !isOwner) {
+                enqueueSnackbar("Waiting for host approval.", { variant: 'info' });
             }
 
-            // Auto-approve if owner, otherwise check event settings
-            const status = (event?.approval_required && !isOwner) ? 'pending' : 'approved';
-            formData.append('status', status);
-
-            console.log(formData);
-            await pb.collection('photos').create(formData);
-
-            if (status === 'pending') {
-                enqueueSnackbar("Photo uploaded! Waiting for host approval.", { variant: 'info' });
-            } else {
-                enqueueSnackbar("Photo uploaded successfully!", { variant: 'success' });
-            }
-        } catch (err) {
-            console.error("Upload failed", err);
-            enqueueSnackbar("Upload failed.", { variant: 'error' });
-        } finally {
-            setUploading(false);
-            if (fileInputRef.current) fileInputRef.current.value = '';
+        } else {
+            enqueueSnackbar(`Uploaded ${successCount} of ${files.length} photos.`, { variant: 'warning' });
         }
     };
 
@@ -385,6 +405,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
                     onChange={handleFileChange}
                     className="hidden"
                     accept="image/*"
+                    multiple
                 />
                 <button
                     onClick={() => fileInputRef.current?.click()}
