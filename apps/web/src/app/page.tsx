@@ -204,6 +204,13 @@ export default function Home() {
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
+    // Validation
+    if (newStartDate && newEndDate && new Date(newEndDate) < new Date(newStartDate)) {
+      enqueueSnackbar("End date must be after start date", { variant: 'error' });
+      setCreating(false);
+      return;
+    }
+
     try {
       const user = getUser();
       const record = await pb.collection('events').create({
@@ -334,7 +341,7 @@ export default function Home() {
                     >
                       <h3 className="font-bold text-lg group-hover:text-blue-400 transition-colors">{event.name}</h3>
                       <div className="flex justify-between mt-2 text-sm text-gray-500">
-                        <span>{new Date(event.date).toLocaleDateString()}</span>
+                        <span>{new Date(event.start_date || event.date || event.created).toLocaleDateString()}</span>
                         <span className="flex items-center gap-1">
                           Public
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">

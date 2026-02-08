@@ -290,6 +290,12 @@ export default function EventPage({ id: propId }: { id?: string }) {
     const handleUpdateEvent = async () => {
         if (!editEventName.trim()) return;
         if (!event) return;
+
+        if (editStartDate && editEndDate && new Date(editEndDate) < new Date(editStartDate)) {
+            enqueueSnackbar("End date must be after start date", { variant: 'error' });
+            return;
+        }
+
         try {
             await pb.collection('events').update(event.id, {
                 name: editEventName,
