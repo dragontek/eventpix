@@ -119,7 +119,7 @@ export default function SlideshowPage({ id: propId }: { id?: string }) {
                     <img
                         src={pb.files.getURL(prevPhoto, prevPhoto.file)}
                         alt=""
-                        className="w-full h-full object-contain"
+                        className="w-full h-full object-contain animate-fade-out"
                     />
                 </div>
             )}

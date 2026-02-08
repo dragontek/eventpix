@@ -13,7 +13,7 @@
         }
     }
 
-    --animate-fade-out: fade-out 0.5s ease-out forwards;
+    --animate-fade-out: fade-out 1s ease-out forwards;
 
     @keyframes fade-out {
         from {
