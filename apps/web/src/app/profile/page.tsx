@@ -158,7 +158,8 @@ export default function ProfilePage() {
                 {/* Avatar Section */}
                 <div className="flex flex-col items-center gap-4">
                     <div className="relative group">
-                        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-3xl font-bold shadow-2xl border-4 border-gray-900 overflow-hidden">
+                        <div className={`w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold shadow-2xl border-4 border-gray-900 overflow-hidden ${(previewUrl || user?.avatar) ? 'bg-gray-900' : 'bg-gradient-to-br from-blue-500 to-purple-600'
+                            }`}>
                             {previewUrl ? (
                                 <img
                                     src={previewUrl}
