@@ -1,12 +1,8 @@
 import { Container, Title, Card, Text, Group, Switch, Stack, Button, Modal } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { useNotifications } from '@mantine/notifications'; // Actually using notifications from context or just console for now
 
 export default function SettingsPage() {
     const [opened, { open, close }] = useDisclosure(false);
-    const notifications = useNotifications(); // This might crash if not provided, usually we use import { notifications } from '@mantine/notifications'; 
-    // Wait, Mantine v7 usually uses the hook for the simpler api or the static object.
-    // Let's use standard window.confirm for simplicity or the modal state we setup.
 
     const handleDeleteAccount = () => {
         close();
