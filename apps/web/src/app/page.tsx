@@ -30,6 +30,7 @@ export default function Home() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [myEvents, setMyEvents] = useState<any[]>([]);
+  const [historyEvents, setHistoryEvents] = useState<any[]>([]);
   // const [publicEvents, setPublicEvents] = useState<any[]>([]); // Removed
   const [authProviders, setAuthProviders] = useState<any[]>([]);
   const [passwordEnabled, setPasswordEnabled] = useState(true);
@@ -136,6 +137,49 @@ export default function Home() {
 
 
   }, []);
+
+  // Fetch History Events
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        // 1. Get from Local Storage
+        const localJoined = JSON.parse(localStorage.getItem('joined_events') || '[]');
+
+        // 2. Get from User Profile (if logged in)
+        const user = getUser();
+        let serverJoined: string[] = [];
+        if (user) {
+          try {
+            const userRecord = await pb.collection('users').getOne(user.id);
+            serverJoined = (userRecord.joined_events as string[]) || [];
+          } catch (e) {
+            console.error("Failed to fetch user joined events", e);
+          }
+        }
+
+        // 3. Merge Unique IDs
+        const allIds = Array.from(new Set([...localJoined, ...serverJoined]));
+
+        if (allIds.length === 0) {
+          setHistoryEvents([]);
+          return;
+        }
+
+        // 4. Fetch Event Details
+        const filter = allIds.map(id => `id="${id}"`).join('||');
+        const records = await pb.collection('events').getList(1, 20, {
+          filter: filter,
+          sort: '-created'
+        });
+
+        setHistoryEvents(records.items);
+      } catch (err) {
+        console.error("Failed to fetch history events", err);
+      }
+    };
+
+    fetchHistory();
+  }, [currentUser]); // Re-run if user logs in/out
 
   // ... (fetchMyEvents and handlers remain the same) ...
   // But wait, I need to include them in the replace call if I am replacing the top part of the file.
@@ -394,6 +438,38 @@ export default function Home() {
               </form>
 
               <div className="w-full mt-12 mb-8">
+
+                {/* History Section */}
+                {historyEvents.length > 0 && (
+                  <div className="mb-8 animate-fade-in">
+                    <div className="relative flex py-2 items-center mb-6">
+                      <div className="flex-grow border-t border-gray-800"></div>
+                      <span className="flex-shrink-0 mx-4 text-gray-400 text-xs uppercase font-bold tracking-widest">Your History</span>
+                      <div className="flex-grow border-t border-gray-800"></div>
+                    </div>
+                    <div className="grid gap-3 w-full">
+                      {historyEvents.map(event => (
+                        <div
+                          key={event.id}
+                          onClick={() => router.push(`/join/${event.code}`)}
+                          className="bg-gray-900/80 hover:bg-gray-800 backdrop-blur-sm border border-gray-800 rounded-xl p-4 cursor-pointer transition-all group flex justify-between items-center"
+                        >
+                          <div className="text-left">
+                            <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition-colors">{event.name}</h3>
+                            <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">
+                              {new Date(event.start_date || event.date || event.created).toLocaleDateString()}
+                            </div>
+                          </div>
+                          <div className="bg-gray-800 group-hover:bg-blue-600/20 p-2 rounded-full transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 group-hover:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <button
                   onClick={() => router.push('/search')}
                   className="w-full py-4 bg-gray-900/50 hover:bg-gray-900 border border-gray-800 text-gray-300 hover:text-white rounded-lg transition-all font-bold uppercase tracking-widest flex items-center justify-center gap-2 group backdrop-blur-sm"
