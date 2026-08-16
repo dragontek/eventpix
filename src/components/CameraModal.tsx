@@ -23,7 +23,7 @@ export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalP
     });
     const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
 
-    // Keep video element srcObject synchronized whenever stream or videoRef updates
+    // Synchronize video element srcObject whenever stream or isOpen state updates
     useEffect(() => {
         if (videoRef.current && stream) {
             videoRef.current.srcObject = stream;
@@ -52,16 +52,21 @@ export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalP
                 throw new Error("Camera API is not supported on this browser.");
             }
 
+            const isMobileDevice = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            const isPortrait = typeof window !== 'undefined' && window.innerHeight > window.innerWidth;
+
             let mediaStream: MediaStream;
             try {
                 mediaStream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: mode,
+                        width: { ideal: isMobileDevice && isPortrait ? 1080 : 1920 },
+                        height: { ideal: isMobileDevice && isPortrait ? 1920 : 1080 },
                     },
                     audio: false,
                 });
             } catch {
-                // Fallback for desktop/laptop webcams that reject facingMode constraints
+                // Fallback for desktop or mobile browsers rejecting aspect constraints
                 mediaStream = await navigator.mediaDevices.getUserMedia({
                     video: true,
                     audio: false,
@@ -75,7 +80,6 @@ export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalP
                 try {
                     const devices = await navigator.mediaDevices.enumerateDevices();
                     const videoDevices = devices.filter((d) => d.kind === 'videoinput');
-                    const isMobileDevice = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
                     setHasMultipleCameras(videoDevices.length > 1 || isMobileDevice);
                 } catch {
                     setHasMultipleCameras(false);
@@ -107,20 +111,53 @@ export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalP
 
         try {
             const video = videoRef.current;
+            const vWidth = video.videoWidth || 1280;
+            const vHeight = video.videoHeight || 720;
+
+            // Determine if the UI / screen viewport is currently held in portrait orientation
+            const isUiPortrait = typeof window !== 'undefined' && (
+                window.innerHeight > window.innerWidth ||
+                (video.clientHeight > 0 && video.clientHeight > video.clientWidth)
+            );
+            const isStreamLandscape = vWidth > vHeight;
+
+            // Rotate 90 degrees if stream bytes are landscape but the device is held upright in portrait mode
+            const shouldRotate = isUiPortrait && isStreamLandscape;
+
             const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth || 1280;
-            canvas.height = video.videoHeight || 720;
+            if (shouldRotate) {
+                canvas.width = vHeight;
+                canvas.height = vWidth;
+            } else {
+                canvas.width = vWidth;
+                canvas.height = vHeight;
+            }
 
             const ctx = canvas.getContext('2d');
             if (!ctx) throw new Error("Could not create canvas context");
 
-            // Flip horizontally if front-facing camera for natural mirror effect
-            if (facingMode === 'user') {
-                ctx.translate(canvas.width, 0);
-                ctx.scale(-1, 1);
+            ctx.save();
+
+            if (shouldRotate) {
+                // Rotate 90 deg clockwise to map landscape sensor stream into portrait photo
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.rotate((90 * Math.PI) / 180);
+
+                if (facingMode === 'user') {
+                    ctx.scale(-1, 1);
+                }
+
+                ctx.drawImage(video, -vWidth / 2, -vHeight / 2, vWidth, vHeight);
+            } else {
+                if (facingMode === 'user') {
+                    ctx.translate(canvas.width, 0);
+                    ctx.scale(-1, 1);
+                }
+
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             }
 
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            ctx.restore();
 
             const blob = await new Promise<Blob | null>((resolve) =>
                 canvas.toBlob(resolve, 'image/jpeg', 0.92)
