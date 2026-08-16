@@ -38,6 +38,8 @@ export type Photo = {
     likes?: string[];
     session_tag?: string;
     phash?: string;
+    owner_name?: string;
+    owner_avatar?: string;
     created: string;
     updated: string;
     expand?: {
@@ -87,10 +89,11 @@ export interface DataProvider {
     register(email: string, pass: string, name?: string): Promise<User>;
     logout(): void;
     getUser(): User | null;
+    getCurrentUser(): Promise<User | null>;
     isAuthenticated(): boolean;
     onAuthChange(callback: (user: User | null) => void): () => void;
     listAuthMethods(): Promise<{ password: boolean; providers: AuthProviderInfo[] }>;
-    authWithOAuth2(provider: string): Promise<void>;
+    authWithOAuth2(provider: string, redirectTo?: string): Promise<void>;
     createGuestUser(): Promise<User>;
     authRefresh(): Promise<void>;
     updateUser(data: { name?: string; avatarFile?: File }): Promise<User>;

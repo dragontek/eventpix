@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { listApprovedPhotos, getPhotoUrl, subscribeToPhotos } from '@/lib/db';
+import QRCode from 'react-qr-code';
 import Image from 'next/image';
 
 
@@ -87,6 +88,7 @@ export default function SlideshowPage({ id: propId }: { id?: string }) {
 
     const currentPhoto = photos[currentIndex];
     const prevPhoto = photos[prevIndex];
+    const albumUrl = typeof window !== 'undefined' ? `${window.location.origin}/event/${id}` : '';
 
     // Safety check if index is out of bounds or photo missing
     if (!currentPhoto || !currentPhoto.file) {
@@ -159,6 +161,21 @@ export default function SlideshowPage({ id: propId }: { id?: string }) {
             {isPlaying && (
                 <div className="absolute top-0 left-0 h-1 bg-white/20 w-full">
                     {/* CSS Animation could go here for the progress bar, but for now just static background */}
+                </div>
+            )}
+
+            {/* Scan-to-join QR */}
+            {albumUrl && (
+                <div className="absolute bottom-4 left-4 z-20 flex flex-col items-center gap-1 bg-black/60 backdrop-blur-sm rounded-2xl p-3 border border-white/10">
+                    <QRCode
+                        value={albumUrl}
+                        size={120}
+                        bgColor="#000000"
+                        fgColor="#FFFFFF"
+                        style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+                        viewBox={`0 0 256 256`}
+                    />
+                    <p className="text-[10px] text-white/70 font-bold uppercase tracking-widest">Scan to join</p>
                 </div>
             )}
         </div>

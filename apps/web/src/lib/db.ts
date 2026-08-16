@@ -18,6 +18,7 @@ export type { DataProvider, DbConfig };
 export type { User, Event, Photo, Invitation, RealtimeEvent, DashboardStats };
 
 export const getUser = () => db.getUser();
+export const getCurrentUser = () => db.getCurrentUser();
 export const isAuthenticated = () => db.isAuthenticated();
 export const onAuthChange = (callback: (user: User | null) => void) => db.onAuthChange(callback);
 export const login = (email: string, pass: string) => db.login(email, pass);
@@ -51,7 +52,7 @@ export const getStats = () => db.getStats();
 export const getProviderName = () => db.getProviderName();
 
 export const listAuthMethods = () => db.listAuthMethods();
-export const authWithOAuth2 = (provider: string) => db.authWithOAuth2(provider);
+export const authWithOAuth2 = (provider: string, redirectTo?: string) => db.authWithOAuth2(provider, redirectTo);
 export const createGuestUser = () => db.createGuestUser();
 export const authRefresh = () => db.authRefresh();
 export const updateUser = (data: { name?: string; avatarFile?: File }) => db.updateUser(data);

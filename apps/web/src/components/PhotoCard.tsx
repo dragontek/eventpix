@@ -10,14 +10,17 @@ dayjs.extend(relativeTime);
 interface PhotoCardProps {
     photo: any;
     currentUserId?: string;
+    currentUserAvatar?: string;
     eventOwnerId?: string;
+    animationDelay?: number;
 }
 
-export default function PhotoCard({ photo, currentUserId, eventOwnerId, animationDelay = 0, onPhotoClick }: PhotoCardProps & { animationDelay?: number; onPhotoClick?: () => void }) {
+export default function PhotoCard({ photo, currentUserId, currentUserAvatar, eventOwnerId, animationDelay = 0, onPhotoClick }: PhotoCardProps & { animationDelay?: number; onPhotoClick?: () => void }) {
     const { enqueueSnackbar } = useSnackbar();
     const url = getPhotoThumbUrl(photo);
     const isOwner = currentUserId && currentUserId === photo.owner;
-    const ownerName = isOwner ? 'You' : (photo.expand?.owner?.name || photo.expand?.owner?.email || 'Guest');
+    const ownerName = isOwner ? 'You' : (photo.owner_name || 'Guest');
+    const ownerAvatar = photo.owner_avatar || (isOwner ? currentUserAvatar : '');
 
     const [isEditing, setIsEditing] = useState(false);
     const [caption, setCaption] = useState(photo.caption || ''); // Renamed from editCaption
@@ -236,8 +239,21 @@ export default function PhotoCard({ photo, currentUserId, eventOwnerId, animatio
                     <>
                         {photo.caption && <p className="text-sm text-white mb-1">{photo.caption}</p>}
                         <div className="flex justify-between items-end text-xs text-gray-400">
-                            <span>by {ownerName}</span>
-                            <span>{dayjs(photo.created).fromNow()}</span>
+                            <span className="flex items-center gap-1.5 min-w-0">
+                                {ownerAvatar ? (
+                                    <img
+                                        src={ownerAvatar}
+                                        alt={ownerName}
+                                        className="w-5 h-5 rounded-full object-cover flex-shrink-0"
+                                    />
+                                ) : (
+                                    <span className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0">
+                                        {ownerName.replace('You', 'Me').substring(0, 2).toUpperCase()}
+                                    </span>
+                                )}
+                                <span className="truncate">by {ownerName}</span>
+                            </span>
+                            <span className="flex-shrink-0">{dayjs(photo.created).fromNow()}</span>
                         </div>
                     </>
                 )}

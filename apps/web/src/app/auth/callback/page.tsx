@@ -15,6 +15,8 @@ export default function AuthCallbackPage() {
             return;
         }
 
+        const from = params.get('from') || '/';
+
         let redirected = false;
         const finish = (path: string) => {
             if (redirected) return;
@@ -27,10 +29,10 @@ export default function AuthCallbackPage() {
                 setStatus('success');
                 onAuthChange((user) => {
                     if (user) {
-                        finish('/');
+                        finish(from);
                     }
                 });
-                setTimeout(() => finish('/'), 2000);
+                setTimeout(() => finish(from), 2000);
             })
             .catch(() => {
                 setStatus('error');

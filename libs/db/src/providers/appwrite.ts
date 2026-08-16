@@ -87,7 +87,7 @@ export class AppwriteProvider implements DataProvider {
         });
     }
 
-    private async loadUser(): Promise<User | null> {
+    async getCurrentUser(): Promise<User | null> {
         try {
             const user = await this.account.get();
             this.cachedUser = this.mapUser(user as Models.User<Record<string, any>>);
@@ -95,6 +95,10 @@ export class AppwriteProvider implements DataProvider {
             this.cachedUser = null;
         }
         return this.cachedUser;
+    }
+
+    private async loadUser(): Promise<User | null> {
+        return this.getCurrentUser();
     }
 
     private mapUser(appwriteUser: Models.User<Record<string, any>>): User {
@@ -144,6 +148,8 @@ export class AppwriteProvider implements DataProvider {
             likes: data.likes || [],
             session_tag: data.session_tag,
             phash: data.phash,
+            owner_name: data.owner_name,
+            owner_avatar: data.owner_avatar,
             created: doc.$createdAt,
             updated: doc.$updatedAt,
             expand: data.expand,
@@ -204,11 +210,12 @@ export class AppwriteProvider implements DataProvider {
     }
 
     isAuthenticated(): boolean {
+        if (this.cachedUser !== null) return true;
         if (this.client.headers['X-Appwrite-Session']) return true;
         if (typeof window === 'undefined') return false;
         try {
             const fallback = JSON.parse(window.localStorage.getItem('cookieFallback') ?? '{}');
-            return !!fallback?.[`a_session_${this.config.projectId}`];
+            return Object.keys(fallback).some(k => k.startsWith('a_session_'));
         } catch {
             return false;
         }
@@ -241,14 +248,15 @@ export class AppwriteProvider implements DataProvider {
         };
     }
 
-    async authWithOAuth2(provider: string): Promise<void> {
-        const redirectUrl = typeof window !== 'undefined'
-            ? `${window.location.origin}/auth/callback`
-            : 'http://localhost:3000/auth/callback';
+    async authWithOAuth2(provider: string, redirectTo?: string): Promise<void> {
+        const origin = typeof window !== 'undefined'
+            ? window.location.origin
+            : 'http://localhost:3000';
+        const callbackUrl = `${origin}/auth/callback${redirectTo ? `?from=${encodeURIComponent(redirectTo)}` : ''}`;
         await this.account.createOAuth2Session(
             provider as any,
-            redirectUrl,
-            `${redirectUrl}?error=true`
+            callbackUrl,
+            `${callbackUrl}${redirectTo ? '&' : '?'}error=true`
         );
     }
 
@@ -303,8 +311,12 @@ export class AppwriteProvider implements DataProvider {
     }
 
     getAvatarUrl(user: User): string {
-        if (!user.avatar) return '';
-        return this.storage.getFilePreview(this.config.avatarsBucketId, user.avatar);
+        if (!user) return '';
+        if (user.avatar) {
+            return this.storage.getFilePreview(this.config.avatarsBucketId, user.avatar);
+        }
+        const name = encodeURIComponent(user.name || 'Guest');
+        return `${this.config.endpoint}/avatars/initials?name=${name}&width=96&height=96&project=${this.config.projectId}`;
     }
 
     async listEvents(): Promise<Event[]> {
@@ -433,7 +445,9 @@ export class AppwriteProvider implements DataProvider {
         const photoData = {
             file: fileResponse.$id,
             event: eventId,
-            owner: data?.owner || '',
+            owner: data?.owner || this.cachedUser?.id || '',
+            owner_name: data?.owner_name || this.cachedUser?.name || '',
+            owner_avatar: data?.owner_avatar || (this.cachedUser ? this.getAvatarUrl(this.cachedUser) : ''),
             status: data?.status || 'pending',
             caption: data?.caption,
             likes: data?.likes || [],
