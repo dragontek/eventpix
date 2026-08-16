@@ -277,7 +277,8 @@ export default function EventPage({ id: propId }: { id?: string }) {
                 const photoRecords = (await listApprovedPhotos(id)).sort((a, b) =>
                     new Date(b.created).getTime() - new Date(a.created).getTime()
                 );
-                setPhotos(photoRecords);
+                const uniquePhotos = Array.from(new Map(photoRecords.map(p => [p.id, p])).values());
+                setPhotos(uniquePhotos);
 
                 // Update loading state only after everything is ready
                 setLoading(false);
@@ -298,13 +299,6 @@ export default function EventPage({ id: propId }: { id?: string }) {
                             setPhotos((prev) => {
                                 const exists = prev.some(p => p.id === e.record.id);
                                 if (exists) {
-                                    return prev.map(p => p.id === e.record.id ? { ...p, ...e.record } : p);
-                                } else {
-                                    return prev;
-                                }
-                            });
-                            setPhotos((prev) => {
-                                if (prev.some(p => p.id === e.record.id)) {
                                     return prev.map(p => p.id === e.record.id ? { ...p, ...e.record } : p);
                                 }
                                 return [e.record, ...prev];
