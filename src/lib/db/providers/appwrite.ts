@@ -34,15 +34,15 @@ export interface AppwriteConfig {
 }
 
 const DEFAULT_CONFIG: AppwriteConfig = {
-    endpoint: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1') : 'https://cloud.appwrite.io/v1',
-    projectId: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || '') : '',
-    databaseId: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || 'eventpix') : 'eventpix',
-    bucketId: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID || 'photos') : 'photos',
-    avatarsBucketId: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_APPWRITE_AVATARS_BUCKET_ID || 'avatars') : 'avatars',
-    usersCollectionId: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_APPWRITE_USERS_COLLECTION_ID || 'users') : 'users',
-    eventsCollectionId: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_APPWRITE_EVENTS_COLLECTION_ID || 'events') : 'events',
-    photosCollectionId: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_APPWRITE_PHOTOS_COLLECTION_ID || 'photos') : 'photos',
-    invitationsCollectionId: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_APPWRITE_INVITATIONS_COLLECTION_ID || 'invitations') : 'invitations',
+    endpoint: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || process.env.APPWRITE_ENDPOINT || 'https://dragontek.io/v1') : 'https://dragontek.io/v1',
+    projectId: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || process.env.APPWRITE_PROJECT_ID || '6a81ca9700213356c019') : '6a81ca9700213356c019',
+    databaseId: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || process.env.APPWRITE_DATABASE_ID || 'eventpix') : 'eventpix',
+    bucketId: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID || process.env.APPWRITE_BUCKET_ID || 'photos') : 'photos',
+    avatarsBucketId: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_APPWRITE_AVATARS_BUCKET_ID || process.env.APPWRITE_AVATARS_BUCKET_ID || 'avatars') : 'avatars',
+    usersCollectionId: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_APPWRITE_USERS_COLLECTION_ID || process.env.APPWRITE_USERS_COLLECTION_ID || 'users') : 'users',
+    eventsCollectionId: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_APPWRITE_EVENTS_COLLECTION_ID || process.env.APPWRITE_EVENTS_COLLECTION_ID || 'events') : 'events',
+    photosCollectionId: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_APPWRITE_PHOTOS_COLLECTION_ID || process.env.APPWRITE_PHOTOS_COLLECTION_ID || 'photos') : 'photos',
+    invitationsCollectionId: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_APPWRITE_INVITATIONS_COLLECTION_ID || process.env.APPWRITE_INVITATIONS_COLLECTION_ID || 'invitations') : 'invitations',
 };
 
 /**
