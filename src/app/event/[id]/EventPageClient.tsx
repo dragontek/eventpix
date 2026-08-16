@@ -897,6 +897,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
                 onCapture={async (file) => {
                     await uploadFiles([file]);
                 }}
+                onFallbackFileUpload={() => fileInputRef.current?.click()}
             />
         </div>
     );

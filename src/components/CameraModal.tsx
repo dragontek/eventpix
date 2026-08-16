@@ -6,15 +6,16 @@ interface CameraModalProps {
     isOpen: boolean;
     onClose: () => void;
     onCapture: (file: File) => Promise<void>;
+    onFallbackFileUpload?: () => void;
 }
 
-export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalProps) {
+export default function CameraModal({ isOpen, onClose, onCapture, onFallbackFileUpload }: CameraModalProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [stream, setStream] = useState<MediaStream | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [capturing, setCapturing] = useState(false);
 
-    // Default to rear ('environment') on mobile, and front ('user') on desktop
+    // Default to rear ('environment') on mobile devices, and front ('user') on desktop
     const [facingMode, setFacingMode] = useState<'user' | 'environment'>(() => {
         if (typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
             return 'environment';
@@ -23,7 +24,7 @@ export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalP
     });
     const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
 
-    // Synchronize video element srcObject whenever stream or isOpen state updates
+    // Keep video element srcObject synchronized whenever stream or isOpen state updates
     useEffect(() => {
         if (videoRef.current && stream) {
             videoRef.current.srcObject = stream;
@@ -48,25 +49,26 @@ export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalP
         stopStream();
 
         try {
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                throw new Error("Camera API is not supported on this browser.");
+            if (typeof window !== 'undefined' && !window.isSecureContext) {
+                throw new Error("Camera access requires HTTPS. Please access this site securely over https://.");
             }
 
-            const isMobileDevice = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-            const isPortrait = typeof window !== 'undefined' && window.innerHeight > window.innerWidth;
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error("Camera API is not supported or is blocked by your browser settings.");
+            }
 
             let mediaStream: MediaStream;
             try {
                 mediaStream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: mode,
-                        width: { ideal: isMobileDevice && isPortrait ? 1080 : 1920 },
-                        height: { ideal: isMobileDevice && isPortrait ? 1920 : 1080 },
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 },
                     },
                     audio: false,
                 });
             } catch {
-                // Fallback for desktop or mobile browsers rejecting aspect constraints
+                // Fallback for desktop or mobile browsers rejecting exact facingMode or resolution constraints
                 mediaStream = await navigator.mediaDevices.getUserMedia({
                     video: true,
                     audio: false,
@@ -75,19 +77,26 @@ export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalP
 
             setStream(mediaStream);
 
-            // Enumerate devices AFTER permissions are granted
+            // Enumerate video devices AFTER permissions are granted
             if (navigator.mediaDevices.enumerateDevices) {
                 try {
                     const devices = await navigator.mediaDevices.enumerateDevices();
                     const videoDevices = devices.filter((d) => d.kind === 'videoinput');
-                    setHasMultipleCameras(videoDevices.length > 1 || isMobileDevice);
+                    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+                    setHasMultipleCameras(videoDevices.length > 1 || isMobile);
                 } catch {
                     setHasMultipleCameras(false);
                 }
             }
         } catch (err: any) {
             console.error("Camera access error:", err);
-            setError(err.message || "Could not access camera. Please check browser permissions.");
+            let errMsg = err.message || "Could not access camera. Please check browser permissions.";
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                errMsg = "Camera permission was denied. Please allow camera access in your browser site settings.";
+            } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                errMsg = "No camera hardware found on this device.";
+            }
+            setError(errMsg);
         }
     };
 
@@ -110,54 +119,39 @@ export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalP
         setCapturing(true);
 
         try {
-            const video = videoRef.current;
-            const vWidth = video.videoWidth || 1280;
-            const vHeight = video.videoHeight || 720;
+            const track = stream?.getVideoTracks()[0];
 
-            // Determine if the UI / screen viewport is currently held in portrait orientation
-            const isUiPortrait = typeof window !== 'undefined' && (
-                window.innerHeight > window.innerWidth ||
-                (video.clientHeight > 0 && video.clientHeight > video.clientWidth)
-            );
-            const isStreamLandscape = vWidth > vHeight;
-
-            // Rotate 90 degrees if stream bytes are landscape but the device is held upright in portrait mode
-            const shouldRotate = isUiPortrait && isStreamLandscape;
-
-            const canvas = document.createElement('canvas');
-            if (shouldRotate) {
-                canvas.width = vHeight;
-                canvas.height = vWidth;
-            } else {
-                canvas.width = vWidth;
-                canvas.height = vHeight;
+            // 1. Try Capacitor / Web standard ImageCapture API if available (Chrome, Android, Edge)
+            if (track && 'ImageCapture' in window) {
+                try {
+                    const imageCapture = new (window as any).ImageCapture(track);
+                    const blob: Blob = await imageCapture.takePhoto();
+                    const file = new File([blob], `camera-${Date.now()}.jpg`, { type: 'image/jpeg' });
+                    await onCapture(file);
+                    stopStream();
+                    onClose();
+                    return;
+                } catch (imgCapErr) {
+                    console.warn("ImageCapture.takePhoto failed, using canvas fallback:", imgCapErr);
+                }
             }
+
+            // 2. Canvas Capture Fallback (Safari / iOS / Browsers without ImageCapture)
+            const video = videoRef.current;
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 1280;
+            canvas.height = video.videoHeight || 720;
 
             const ctx = canvas.getContext('2d');
             if (!ctx) throw new Error("Could not create canvas context");
 
-            ctx.save();
-
-            if (shouldRotate) {
-                // Rotate 90 deg clockwise to map landscape sensor stream into portrait photo
-                ctx.translate(canvas.width / 2, canvas.height / 2);
-                ctx.rotate((90 * Math.PI) / 180);
-
-                if (facingMode === 'user') {
-                    ctx.scale(-1, 1);
-                }
-
-                ctx.drawImage(video, -vWidth / 2, -vHeight / 2, vWidth, vHeight);
-            } else {
-                if (facingMode === 'user') {
-                    ctx.translate(canvas.width, 0);
-                    ctx.scale(-1, 1);
-                }
-
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            // Mirror horizontally if front-facing camera for natural preview
+            if (facingMode === 'user') {
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
             }
 
-            ctx.restore();
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
             const blob = await new Promise<Blob | null>((resolve) =>
                 canvas.toBlob(resolve, 'image/jpeg', 0.92)
@@ -207,17 +201,31 @@ export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalP
                 {/* Video Container */}
                 <div className="relative flex-1 bg-black flex items-center justify-center min-h-[320px] overflow-hidden">
                     {error ? (
-                        <div className="p-6 text-center text-red-400 space-y-3">
+                        <div className="p-6 text-center text-red-400 space-y-4 max-w-md mx-auto">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-red-400/80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                             </svg>
-                            <p className="text-sm font-medium">{error}</p>
-                            <button
-                                onClick={() => startCamera(facingMode)}
-                                className="text-xs bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition border border-gray-700"
-                            >
-                                Try Again
-                            </button>
+                            <p className="text-sm font-medium leading-relaxed">{error}</p>
+                            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                                <button
+                                    onClick={() => startCamera(facingMode)}
+                                    className="text-xs bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition border border-gray-700 font-semibold"
+                                >
+                                    Try Again
+                                </button>
+                                {onFallbackFileUpload && (
+                                    <button
+                                        onClick={() => {
+                                            stopStream();
+                                            onClose();
+                                            onFallbackFileUpload();
+                                        }}
+                                        className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition font-semibold"
+                                    >
+                                        Upload File Instead
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     ) : (
                         <video
