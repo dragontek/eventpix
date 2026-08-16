@@ -38,6 +38,7 @@ export const updatePhoto = (id: string, data: any) => db.updatePhoto?.(id, data)
 export const updatePhotoStatus = (id: string, status: any) => db.updatePhotoStatus(id, status);
 export const deletePhoto = (id: string) => db.deletePhoto(id);
 export const getPhotoUrl = (photo: any) => db.getPhotoUrl(photo);
+export const getPhotoThumbUrl = (photo: any) => db.getPhotoThumbUrl(photo);
 
 export const subscribeToPhotos = (callback: (e: RealtimeEvent) => void) => db.subscribeToPhotos(callback);
 export const subscribe = (collection: string, callback: (e: RealtimeEvent) => void) => db.subscribe(collection, callback);
