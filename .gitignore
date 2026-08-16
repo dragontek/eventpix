@@ -23,18 +23,8 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Backend (PocketBase)
-backend/pocketbase
-backend/pb_data
-backend/pb_public
-!backend/pb_migrations
-
 # IDEs
 .vscode
 .idea
 *.swp
 *.swo
-
-# Temporary scripts (optional, but maybe keep them?)
-# inspect_*.ts
-# test_*.ts

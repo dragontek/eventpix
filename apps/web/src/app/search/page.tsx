@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { pb } from '@/lib/pocketbase';
+import { listEvents } from '@/lib/db';
 
 export default function SearchPage() {
     const router = useRouter();
@@ -15,29 +15,23 @@ export default function SearchPage() {
         const fetchEvents = async () => {
             setLoading(true);
             try {
-                // Base filter: Always public
-                let filter = 'visibility = "public"';
-                let sort = 'start_date'; // Ascending by default (upcoming first)
-                let perPage = 50;
-
-                // If query, add name filter
+                const allEvents = await listEvents();
+                
+                // Filter: Always public
+                let filtered = allEvents.filter(e => e.visibility === 'public');
+                
+                // If query, filter by name
                 if (query.trim()) {
-                    filter += ` && name ~ "${query.trim()}"`;
-                    sort = '-start_date'; // Show newest/recent first when searching
+                    const q = query.trim().toLowerCase();
+                    filtered = filtered.filter(e => e.name.toLowerCase().includes(q));
                 } else {
                     // Default view: Upcoming Public Events
-                    // Filter for future events
-                    filter += ` && start_date >= "${new Date().toISOString()}"`;
-                    // Limit to next 5
-                    perPage = 5;
+                    const now = new Date().toISOString();
+                    filtered = filtered.filter(e => !e.start_date || e.start_date >= now);
+                    filtered = filtered.slice(0, 5); // Limit to next 5
                 }
 
-                const result = await pb.collection('events').getList(1, perPage, {
-                    filter: filter,
-                    sort: sort, // ASC for upcoming
-                });
-
-                setEvents(result.items);
+                setEvents(filtered);
             } catch (err) {
                 console.error("Error fetching public events:", err);
             } finally {

@@ -5,7 +5,7 @@ import { IconPhoto, IconSettings, IconUsers, IconArrowLeft, IconTrash, IconHeart
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { useData } from '../providers/DataProvider';
-import type { Event, Photo } from '../providers/types';
+import type { Event, Photo } from '@eventpix/db';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import JSZip from 'jszip';

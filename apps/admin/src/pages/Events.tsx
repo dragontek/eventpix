@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Table, Title, Button, Group, Badge, ActionIcon, Loader, Center, Tooltip } from '@mantine/core';
 import { IconEye, IconTrash, IconPlus } from '@tabler/icons-react';
 import { useData } from '../providers/DataProvider';
-import type { Event } from '../providers/types';
+import type { Event } from '@eventpix/db';
 import { useNavigate } from 'react-router-dom';
 import { notifications } from '@mantine/notifications';
 
@@ -66,7 +66,7 @@ export default function Events() {
                     </Badge>
                 </Tooltip>
             </Table.Td>
-            <Table.Td>{event.photoCount || 0}</Table.Td>
+            <Table.Td>{(event as any).photoCount || 0}</Table.Td>
             <Table.Td>
                 <Tooltip label={
                     event.join_mode === 'open' ? 'Anyone can enter' :

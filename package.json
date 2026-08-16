@@ -11,6 +11,6 @@
     "concurrently": "^8.2.2"
   },
   "dependencies": {
-    "pocketbase": "^0.26.8"
+    "appwrite": "^18.1.0"
   }
 }

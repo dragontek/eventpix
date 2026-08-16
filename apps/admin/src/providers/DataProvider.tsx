@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import type { Event, Photo, Invitation } from './types';
-import PocketBase from 'pocketbase';
+import type { Event, Photo, Invitation } from '@eventpix/db';
+import { 
+    getUser, isAuthenticated, onAuthChange, login, logout,
+    listEvents, getEvent, createEvent, updateEvent, deleteEvent,
+    listPendingPhotos, listEventPhotos, listApprovedPhotos,
+    deletePhoto, updatePhotoStatus, getPhotoUrl, subscribeToPhotos,
+    listInvitations, createInvitation, deleteInvitation, getStats,
+    listAuthMethods, authWithOAuth2
+} from '../lib/db';
 
-// Initialize PocketBase client
-const pb = new PocketBase('/');
-pb.autoCancellation(false);
-
-// Define the DataContextType based on the full implementation provided
 interface DataContextType {
     user: any;
     login: (email: string, password: string) => Promise<void>;
@@ -20,16 +22,14 @@ interface DataContextType {
     listEventPhotos: (eventId: string) => Promise<Photo[]>;
     listApprovedPhotos: (eventId: string) => Promise<Photo[]>;
     deletePhoto: (id: string) => Promise<void>;
-    updatePhotoStatus: (id: string, status: string) => Promise<Photo>;
+    updatePhotoStatus: (id: string, status: string) => Promise<void>;
     getPhotoUrl: (photo: Photo) => string;
     subscribeToPhotos: (callback: (data: any) => void) => () => void;
-    // Auth Helpers
     getAuthStoreIsValid: () => boolean;
     getUser: () => any;
     onAuthChange: (callback: (model: any) => void) => () => void;
     listAuthMethods: () => Promise<any>;
     authWithOAuth2: (provider: string) => Promise<void>;
-    // Invitations
     listInvitations: (eventId: string) => Promise<Invitation[]>;
     createInvitation: (eventId: string, email: string) => Promise<Invitation>;
     deleteInvitation: (id: string) => Promise<void>;
@@ -47,145 +47,87 @@ export function useData() {
 }
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
-    const [user, setUser] = useState<any>(pb.authStore.model);
+    const [user, setUser] = useState<any>(getUser());
 
     useEffect(() => {
-        return pb.authStore.onChange((_token, model) => {
-            setUser(model);
+        return onAuthChange((user) => {
+            setUser(user);
         });
     }, []);
 
     const value: DataContextType = {
         user,
         login: async (email, password) => {
-            await pb.collection('users').authWithPassword(email, password);
+            await login(email, password);
         },
         logout: () => {
-            pb.authStore.clear();
+            logout();
         },
         listEvents: async () => {
-            const records = await pb.collection('events').getFullList({
-                sort: '-created',
-            });
-
-            // Enrich with photo counts
-            const eventsWithCounts = await Promise.all(records.map(async (event) => {
-                try {
-                    const result = await pb.collection('photos').getList(1, 1, {
-                        filter: `event = "${event.id}" && status = "approved"`,
-                    });
-                    return { ...event, photoCount: result.totalItems };
-                } catch (e) {
-                    console.error(`Failed to get count for event ${event.id}`, e);
-                    return { ...event, photoCount: 0 };
-                }
-            }));
-
-            return eventsWithCounts as unknown as Event[];
+            const records = await listEvents();
+            return records as unknown as Event[];
         },
         getEvent: async (id) => {
-            const record = await pb.collection('events').getOne(id);
+            const record = await getEvent(id);
             return record as unknown as Event;
         },
         createEvent: async (data) => {
-            // Ensure owner is set to current user if not provided
-            const eventData = {
-                ...data,
-                owner: pb.authStore.model?.id
-            };
-            const record = await pb.collection('events').create(eventData);
+            const record = await createEvent(data);
             return record as unknown as Event;
         },
         updateEvent: async (id, data) => {
-            const record = await pb.collection('events').update(id, data);
+            const record = await updateEvent(id, data);
             return record as unknown as Event;
         },
         deleteEvent: async (id) => {
-            await pb.collection('events').delete(id);
+            await deleteEvent(id);
         },
         listEventPhotos: async (eventId) => {
-            const records = await pb.collection('photos').getFullList({
-                filter: `event = "${eventId}"`,
-                sort: '-created',
-                expand: 'owner'
-            });
+            const records = await listEventPhotos(eventId);
             return records as unknown as Photo[];
         },
         listApprovedPhotos: async (eventId) => {
-            const records = await pb.collection('photos').getFullList({
-                filter: `event = "${eventId}" && status = "approved"`,
-                sort: '-created'
-            });
+            const records = await listApprovedPhotos(eventId);
             return records as unknown as Photo[];
         },
         listPendingPhotos: async () => {
-            const records = await pb.collection('photos').getFullList({
-                filter: `status = "pending"`,
-                sort: '-created',
-                expand: 'owner,event'
-            });
+            const records = await listPendingPhotos();
             return records as unknown as Photo[];
         },
         deletePhoto: async (id) => {
-            await pb.collection('photos').delete(id);
+            await deletePhoto(id);
         },
         updatePhotoStatus: async (id, status) => {
-            const record = await pb.collection('photos').update(id, { status });
-            return record as unknown as Photo;
+            await updatePhotoStatus(id, status as any);
         },
-        getPhotoUrl: (photo: any) => pb.files.getUrl(photo, photo.file),
+        getPhotoUrl: (photo: any) => getPhotoUrl(photo),
         subscribeToPhotos: (callback) => {
-            pb.collection('photos').subscribe('*', callback);
-            return () => {
-                pb.collection('photos').unsubscribe();
-            };
+            return subscribeToPhotos(callback);
         },
-        // Auth Helpers for AuthProvider
-        getAuthStoreIsValid: () => pb.authStore.isValid,
-        getUser: () => pb.authStore.model,
+        getAuthStoreIsValid: () => isAuthenticated(),
+        getUser: () => getUser(),
         onAuthChange: (callback: (model: any) => void) => {
-            return pb.authStore.onChange((_token, model) => {
-                callback(model);
-            });
+            return onAuthChange(callback);
         },
         listAuthMethods: async () => {
-            return await pb.collection('users').listAuthMethods();
+            return await listAuthMethods();
         },
         authWithOAuth2: async (provider: string) => {
-            await pb.collection('users').authWithOAuth2({ provider });
+            await authWithOAuth2(provider);
         },
-        // Invitations
         listInvitations: async (eventId) => {
-            const records = await pb.collection('invitations').getFullList({
-                filter: `event = "${eventId}"`,
-                sort: '-created'
-            });
+            const records = await listInvitations(eventId);
             return records as unknown as Invitation[];
         },
         createInvitation: async (eventId, email) => {
-            const record = await pb.collection('invitations').create({
-                event: eventId,
-                email: email
-            });
+            const record = await createInvitation(eventId, email);
             return record as unknown as Invitation;
         },
         deleteInvitation: async (id) => {
-            await pb.collection('invitations').delete(id);
+            await deleteInvitation(id);
         },
         getStats: async () => {
-            const [events, photos, users, pending] = await Promise.all([
-                pb.collection('events').getList(1, 1),
-                pb.collection('photos').getList(1, 1),
-                pb.collection('users').getList(1, 1),
-                pb.collection('photos').getList(1, 1, { filter: 'status = "pending"' })
-            ]);
-
-            return {
-                totalEvents: events.totalItems,
-                totalPhotos: photos.totalItems,
-                totalUsers: users.totalItems,
-                pendingPhotos: pending.totalItems
-            };
+            return await getStats();
         }
     };
 
@@ -196,7 +138,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     );
 }
 
-// Backwards compatibility wrapper if needed, or strictly for main.tsx if it uses this name
 export function DataProviderWrapper({ children }: { children: React.ReactNode }) {
     return <DataProvider>{children}</DataProvider>;
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { pb } from '@/lib/pocketbase';
+import { listApprovedPhotos, getPhotoUrl, subscribeToPhotos } from '@/lib/db';
 import Image from 'next/image';
 
 
@@ -21,12 +21,8 @@ export default function SlideshowPage({ id: propId }: { id?: string }) {
     useEffect(() => {
         const loadPhotos = async () => {
             try {
-                const records = await pb.collection('photos').getList(1, 200, {
-                    filter: `event = "${id}" && status = "approved"`,
-                    sort: '-created', // Newest first? Or oldest? Slideshow usually newest first or random. Let's do newest.
-                    expand: 'owner',
-                });
-                setPhotos(records.items);
+                const records = await listApprovedPhotos(id);
+                setPhotos(records);
             } catch (err) {
                 console.error("Error loading photos", err);
             } finally {
@@ -38,25 +34,18 @@ export default function SlideshowPage({ id: propId }: { id?: string }) {
             loadPhotos();
 
             // Realtime
-            pb.collection('photos').subscribe('*', (e) => {
+            const unsubscribe = subscribeToPhotos((e) => {
                 if (e.record.event === id && e.record.status === 'approved') {
                     if (e.action === 'create') {
-                        pb.collection('photos').getOne(e.record.id, { expand: 'owner' })
-                            .then(newPhoto => {
-                                setPhotos(prev => [newPhoto, ...prev]);
-                                // Optional: Reset index to 0 to show new photo immediately? 
-                                // Or let it cycle naturally. Let's just add it.
-                            });
+                        setPhotos(prev => [e.record, ...prev]);
                     } else if (e.action === 'delete') {
                         setPhotos(prev => prev.filter(p => p.id !== e.record.id));
                     }
                 }
             });
+            
+            return () => unsubscribe();
         }
-
-        return () => {
-            pb.collection('photos').unsubscribe('*');
-        };
     }, [id]);
 
     // Timer
@@ -117,7 +106,7 @@ export default function SlideshowPage({ id: propId }: { id?: string }) {
             {prevPhoto && prevPhoto.file && (
                 <div className="absolute inset-0 flex items-center justify-center z-0">
                     <img
-                        src={pb.files.getURL(prevPhoto, prevPhoto.file)}
+                        src={getPhotoUrl(prevPhoto)}
                         alt=""
                         className="w-full h-full object-contain animate-fade-out"
                     />
@@ -129,7 +118,7 @@ export default function SlideshowPage({ id: propId }: { id?: string }) {
                 <div className="relative w-full h-full flex items-center justify-center">
                     <img
                         key={currentPhoto.id} // Key forces remount and triggers animation
-                        src={pb.files.getURL(currentPhoto, currentPhoto.file)}
+                        src={getPhotoUrl(currentPhoto)}
                         alt={currentPhoto.caption || "Event Photo"}
                         className="w-full h-full object-contain animate-fade-in"
                     />

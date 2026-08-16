@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Title, SimpleGrid, Card, Text, Group, ThemeIcon, Loader, Center } from '@mantine/core';
 import { IconPhoto, IconUsers, IconCalendarEvent, IconAlertCircle } from '@tabler/icons-react';
 import { useData } from '../providers/DataProvider';
-import type { DashboardStats } from '../providers/types';
+import type { DashboardStats } from '@eventpix/db';
 import { notifications } from '@mantine/notifications';
 
 export default function Dashboard() {
