@@ -517,6 +517,10 @@ export class AppwriteProvider implements DataProvider {
         return this.getFileUrl(this.config.photosCollectionId, photo.id, photo.file);
     }
 
+    getPhotoThumbUrl(photo: Photo): string {
+        return this.storage.getFilePreview(this.config.bucketId, photo.file, 600, undefined, undefined, 80);
+    }
+
     getFileUrl(_collection: string, _recordId: string, fileName: string): string {
         if (!fileName) return '';
         return this.storage.getFilePreview(this.config.bucketId, fileName);

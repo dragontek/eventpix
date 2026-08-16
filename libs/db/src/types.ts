@@ -115,6 +115,7 @@ export interface DataProvider {
     updatePhotoStatus(id: string, status: Photo['status']): Promise<void>;
     deletePhoto(id: string): Promise<void>;
     getPhotoUrl(photo: Photo): string;
+    getPhotoThumbUrl(photo: Photo): string;
 
     // Storage
     getFileUrl(collection: string, recordId: string, fileName: string): string;

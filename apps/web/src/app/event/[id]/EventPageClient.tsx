@@ -274,7 +274,9 @@ export default function EventPage({ id: propId }: { id?: string }) {
                 setEditEndDate(toLocalISO(eventRecord.end_date));
 
                 // Fetch photos
-                const photoRecords = await listApprovedPhotos(id);
+                const photoRecords = (await listApprovedPhotos(id)).sort((a, b) =>
+                    new Date(b.created).getTime() - new Date(a.created).getTime()
+                );
                 setPhotos(photoRecords);
 
                 // Update loading state only after everything is ready
@@ -531,13 +533,14 @@ export default function EventPage({ id: propId }: { id?: string }) {
             {/* Grid */}
             <main className="p-4">
                 <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
-                    {photos.map(photo => (
+                    {photos.map((photo, index) => (
                         <PhotoCard
                             key={photo.id}
                             photo={photo}
                             currentUserId={currentUser?.id}
                             currentUserAvatar={currentUser ? getAvatarUrl(currentUser) : undefined}
                             eventOwnerId={event?.owner} // Assuming event owner is not expanded, just the ID
+                            animationDelay={index * 70}
                             onPhotoClick={() => setSelectedPhotoIndex(photos.indexOf(photo))}
                         />
                     ))}
