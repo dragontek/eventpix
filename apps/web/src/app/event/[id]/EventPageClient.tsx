@@ -527,14 +527,13 @@ export default function EventPage({ id: propId }: { id?: string }) {
             {/* Grid */}
             <main className="p-4">
                 <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
-                    {photos.map((photo, index) => (
+                    {photos.map((photo) => (
                         <PhotoCard
                             key={photo.id}
                             photo={photo}
                             currentUserId={currentUser?.id}
                             currentUserAvatar={currentUser ? getAvatarUrl(currentUser) : undefined}
                             eventOwnerId={event?.owner} // Assuming event owner is not expanded, just the ID
-                            animationDelay={index * 70}
                             onPhotoClick={() => setSelectedPhotoIndex(photos.indexOf(photo))}
                         />
                     ))}
