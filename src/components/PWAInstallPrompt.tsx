@@ -58,8 +58,8 @@ export function PWAInstallPrompt() {
     if (!showAndroid && !showIos) return null;
 
     return (
-        <div className="fixed bottom-4 inset-x-0 z-40 px-4">
-            <div className="mx-auto max-w-md bg-gray-900 border border-gray-700 rounded-2xl p-4 shadow-2xl flex items-center gap-3">
+        <div className="fixed bottom-4 inset-x-0 z-30 px-4 pointer-events-none">
+            <div className="mx-auto max-w-md bg-gray-900 border border-gray-700 rounded-2xl p-4 shadow-2xl flex items-center gap-3 pointer-events-auto">
                 <img
                     src="/icons/icon-maskable-192.png"
                     alt=""

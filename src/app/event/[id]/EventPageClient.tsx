@@ -140,11 +140,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
     };
 
     const handleCameraClick = () => {
-        if (typeof navigator !== 'undefined' && navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
-            setIsCameraModalOpen(true);
-        } else {
-            cameraInputRef.current?.click();
-        }
+        setIsCameraModalOpen(true);
     };
 
     const uploadFiles = async (files: File[]) => {
@@ -537,7 +533,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
 
             {/* FAB */}
             {/* FABs */}
-            <div className="fixed bottom-6 right-6 flex flex-col items-center gap-4">
+            <div className="fixed bottom-6 right-6 z-40 flex flex-col items-center gap-4">
                 {/* Secondary: Gallery */}
                 <input
                     type="file"
@@ -558,7 +554,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
                 <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploading}
-                    className="bg-gray-700 hover:bg-gray-600 text-white rounded-full p-3 shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="bg-gray-700 hover:bg-gray-600 text-white rounded-full p-3 shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     title="Upload from Gallery"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -570,7 +566,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
                 <button
                     onClick={handleCameraClick}
                     disabled={uploading}
-                    className="bg-blue-600 hover:bg-blue-500 text-white rounded-full p-4 shadow-xl transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="bg-blue-600 hover:bg-blue-500 text-white rounded-full p-4 shadow-xl transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     title="Take Photo"
                 >
                     {uploading ? (

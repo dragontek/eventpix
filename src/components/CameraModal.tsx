@@ -114,6 +114,18 @@ export default function CameraModal({ isOpen, onClose, onCapture, onFallbackFile
         setFacingMode((prev) => (prev === 'user' ? 'environment' : 'user'));
     };
 
+    const getDeviceOrientationAngle = (): number => {
+        if (typeof window !== 'undefined') {
+            if (window.screen && window.screen.orientation && typeof window.screen.orientation.angle === 'number') {
+                return window.screen.orientation.angle;
+            }
+            if (typeof (window as any).orientation === 'number') {
+                return (window as any).orientation;
+            }
+        }
+        return 0;
+    };
+
     const handleSnap = async () => {
         if (!videoRef.current || capturing) return;
         setCapturing(true);
@@ -132,26 +144,56 @@ export default function CameraModal({ isOpen, onClose, onCapture, onFallbackFile
                     onClose();
                     return;
                 } catch (imgCapErr) {
-                    console.warn("ImageCapture.takePhoto failed, using canvas fallback:", imgCapErr);
+                    console.warn("ImageCapture.takePhoto failed, using orientation canvas fallback:", imgCapErr);
                 }
             }
 
-            // 2. Canvas Capture Fallback (Safari / iOS / Browsers without ImageCapture)
+            // 2. Dynamic Orientation-Aware Canvas Fallback (Safari / iOS / Fallback Browsers)
             const video = videoRef.current;
+            const vWidth = video.videoWidth || 1280;
+            const vHeight = video.videoHeight || 720;
+            const isMobile = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            const isStreamLandscape = vWidth > vHeight;
+            const angle = getDeviceOrientationAngle();
+
+            // Calculate rotation angle based on device orientation sensor
+            let rotation = 0;
+            if (isMobile) {
+                if (angle === 0 || angle === 180) {
+                    // Mobile held vertically in portrait
+                    if (isStreamLandscape) {
+                        rotation = angle === 0 ? 90 : 270;
+                    } else {
+                        rotation = angle;
+                    }
+                } else if (angle === 90) {
+                    // Mobile rotated 90deg left (landscape)
+                    rotation = 0;
+                } else if (angle === 270 || angle === -90) {
+                    // Mobile rotated 90deg right (landscape inverted)
+                    rotation = 180;
+                }
+            }
+
+            const is90or270 = rotation === 90 || rotation === 270;
             const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth || 1280;
-            canvas.height = video.videoHeight || 720;
+            canvas.width = is90or270 ? vHeight : vWidth;
+            canvas.height = is90or270 ? vWidth : vHeight;
 
             const ctx = canvas.getContext('2d');
             if (!ctx) throw new Error("Could not create canvas context");
 
-            // Mirror horizontally if front-facing camera for natural preview
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate((rotation * Math.PI) / 180);
+
+            // Mirror horizontally if front-facing selfie camera
             if (facingMode === 'user') {
-                ctx.translate(canvas.width, 0);
                 ctx.scale(-1, 1);
             }
 
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            ctx.drawImage(video, -vWidth / 2, -vHeight / 2, vWidth, vHeight);
+            ctx.restore();
 
             const blob = await new Promise<Blob | null>((resolve) =>
                 canvas.toBlob(resolve, 'image/jpeg', 0.92)
