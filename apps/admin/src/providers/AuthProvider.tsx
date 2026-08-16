@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useData } from './DataProvider';
-import type { User } from './types';
+import type { User } from '@eventpix/db';
 
 interface AuthContextType {
     isAuth: boolean;

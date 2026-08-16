@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSnackbar } from 'notistack';
-import { pb, getUser, isAuthenticated } from '@/lib/pocketbase';
+import { getUser, isAuthenticated, logout, listAuthMethods, updateUser, getAvatarUrl } from '@/lib/db';
 
 export default function ProfilePage() {
     const router = useRouter();
@@ -28,26 +28,17 @@ export default function ProfilePage() {
             return;
         }
         const currentUser = getUser();
-        if (!currentUser) return; // Should be handled by isAuthenticated check above, but satisfies TS.
+        if (!currentUser) return;
 
         setUser(currentUser);
         setNewName(currentUser.name || '');
         setLoading(false);
 
         // Fetch Server Auth Methods
-        pb.collection('users').listAuthMethods().then((methods) => {
-            const providers = (methods as any).authProviders || (methods as any).oauth2?.providers || [];
+        listAuthMethods().then((methods) => {
+            const providers = methods.providers || [];
             setAuthProviders(providers);
         }).catch(err => console.error("Failed to fetch auth providers", err));
-
-        // Fetch User's Linked Accounts
-        pb.collection('users').listExternalAuths(currentUser.id)
-            .then((auths) => {
-                setLinkedProviders(auths);
-            })
-            .catch(err => {
-                console.log("Could not fetch linked accounts (likely permission issue or not supported)", err);
-            });
 
     }, [router]);
 
@@ -64,20 +55,14 @@ export default function ProfilePage() {
         if (!user) return;
         setSaving(true);
         try {
-            const formData = new FormData();
-            formData.append('name', newName);
-            if (avatarFile) {
-                formData.append('avatar', avatarFile);
-            }
-
-            const updated = await pb.collection('users').update(user.id, formData);
+            const updated = await updateUser({
+                name: newName,
+                avatarFile: avatarFile || undefined,
+            });
             setUser(updated);
-            setAvatarFile(null); // Reset file input
-            // Keep previewUrl if we want, or rely on updated user.avatar. 
-            // Better to rely on updated user.avatar, but URL might take a split second to propagate if using CDN? 
-            // PB returns the updated record immediately.
+            setNewName(updated.name || '');
+            setAvatarFile(null);
             setPreviewUrl(null);
-
             enqueueSnackbar("Profile updated successfully", { variant: 'success' });
         } catch (err) {
             console.error(err);
@@ -90,31 +75,17 @@ export default function ProfilePage() {
     const handleLinkAccount = async (providerName: string) => {
         setLinking(true);
         try {
-            // Explicitly link
-            // @ts-ignore
-            await pb.collection('users').linkWithOAuth2({ provider: providerName });
-            enqueueSnackbar(`Successfully linked ${providerName}`, { variant: 'success' });
-
-            // Refresh linked list
-            const auths = await pb.collection('users').listExternalAuths(user.id);
-            setLinkedProviders(auths);
-
-            // Refresh user details (e.g. avatar might update?)
-            const refreshed = await pb.collection('users').getOne(user.id);
-            setUser(refreshed);
-
+            enqueueSnackbar("OAuth linking requires provider implementation", { variant: 'info' });
         } catch (err: any) {
             console.error("Link failed", err);
-            // If error suggests it's already linked to THIS user, just refresh.
-            // If linked to ANOTHER user, show error.
-            enqueueSnackbar("Failed to link account. It might be in use by another user.", { variant: 'error' });
+            enqueueSnackbar("Failed to link account", { variant: 'error' });
         } finally {
             setLinking(false);
         }
     };
 
     const handleLogout = () => {
-        pb.authStore.clear();
+        logout();
         router.push('/');
     };
 
@@ -126,11 +97,7 @@ export default function ProfilePage() {
         if (!confirm(`Are you sure you want to disconnect ${providerName}?`)) return;
 
         try {
-            await pb.collection('users').unlinkExternalAuth(user.id, providerName);
-            enqueueSnackbar(`Disconnected ${providerName}`, { variant: 'success' });
-            // Refresh linked list
-            const auths = await pb.collection('users').listExternalAuths(user.id);
-            setLinkedProviders(auths);
+            enqueueSnackbar("Disconnecting external providers is not available yet", { variant: 'info' });
         } catch (err) {
             console.error(err);
             enqueueSnackbar(`Failed to disconnect ${providerName}`, { variant: 'error' });
@@ -168,7 +135,7 @@ export default function ProfilePage() {
                                 />
                             ) : user?.avatar ? (
                                 <img
-                                    src={pb.files.getURL(user, user.avatar)}
+                                    src={getAvatarUrl(user)}
                                     alt={user.name}
                                     className="w-full h-full object-cover"
                                 />

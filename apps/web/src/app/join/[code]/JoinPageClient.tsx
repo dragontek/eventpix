@@ -2,7 +2,10 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { pb } from '@/lib/pocketbase';
+import { 
+    getEvent, isAuthenticated, getUser, login, logout, onAuthChange, 
+    listAuthMethods, authWithOAuth2, createGuestUser, listEvents 
+} from '@/lib/db';
 
 export default function JoinPage({ code: propCode }: { code?: string }) {
     const params = useParams();
@@ -17,21 +20,19 @@ export default function JoinPage({ code: propCode }: { code?: string }) {
     const [authError, setAuthError] = useState('');
     const authenticating = useRef(false);
 
-    const checkExistingAuth = async () => {
-        if (pb.authStore.isValid) {
+const checkExistingAuth = async () => {
+        if (isAuthenticated()) {
             try {
                 console.log("Verifying existing session...");
-                await pb.collection('users').authRefresh();
-
-                if (!pb.authStore.model) {
+                const user = getUser();
+                if (!user) {
                     throw new Error("Token valid but user model missing");
                 }
-
-                console.log("Existing session valid. User:", pb.authStore.model.id);
+                console.log("Existing session valid. User:", user.id);
                 setAuthStatus('success');
             } catch (err) {
                 console.warn("Existing session invalid or expired.", err);
-                pb.authStore.clear();
+                logout();
                 setAuthStatus('idle');
             }
         }
@@ -46,19 +47,10 @@ export default function JoinPage({ code: propCode }: { code?: string }) {
         console.log("Starting anonymous auth...");
 
         try {
-            const randomId = Math.random().toString(36).substring(7);
-            const email = `guest_${randomId}@eventpix.local`;
-            const password = `pass_${randomId}`;
-
-            await pb.collection('users').create({
-                email,
-                password,
-                passwordConfirm: password,
-                name: "Guest " + randomId
-            });
-            await pb.collection('users').authWithPassword(email, password);
-            console.log("Auth successful:", pb.authStore.model?.id);
+            await createGuestUser();
+            console.log("Auth successful");
             setAuthStatus('success');
+            authenticating.current = false;
             return true;
         } catch (err: any) {
             console.error("Auth failed:", err);
@@ -77,12 +69,11 @@ export default function JoinPage({ code: propCode }: { code?: string }) {
             try {
                 // Find event by code (case-insensitive by convention)
                 const normalizedCode = code.toUpperCase();
-                const records = await pb.collection('events').getList(1, 1, {
-                    filter: `code = "${normalizedCode}"`,
-                });
+                const events = await listEvents();
+                const found = events.find(e => e.code === normalizedCode);
 
-                if (records.items.length > 0) {
-                    setEvent(records.items[0]);
+                if (found) {
+                    setEvent(found);
                 } else {
                     setError('Event not found');
                 }
@@ -108,8 +99,8 @@ export default function JoinPage({ code: propCode }: { code?: string }) {
     const [authProviders, setAuthProviders] = useState<any[]>([]);
 
     useEffect(() => {
-        pb.collection('users').listAuthMethods().then((methods) => {
-            const providers = (methods as any).authProviders || (methods as any).oauth2?.providers || [];
+        listAuthMethods().then((methods) => {
+            const providers = methods.providers || [];
             setAuthProviders(providers);
         }).catch(err => console.error("Failed to fetch auth providers", err));
     }, []);
@@ -178,88 +169,11 @@ export default function JoinPage({ code: propCode }: { code?: string }) {
     const handleOAuthLogin = async (providerName: string) => {
         setLoading(true);
         try {
-            let authData;
-
-            // 1. Authenticate or Link
-            if (pb.authStore.isValid && pb.authStore.model) {
-                try {
-                    console.log("Attempting to link social account to guest session...");
-                    // Cast to any to bypass TS error if definition is missing
-                    authData = await (pb.collection('users') as any).linkWithOAuth2({ provider: providerName });
-                    console.log("Account linked successfully.");
-                } catch (linkErr) {
-                    console.warn("Link failed (likely account exists), falling back to switch.", linkErr);
-                    authData = await pb.collection('users').authWithOAuth2({ provider: providerName });
-                }
-            } else {
-                authData = await pb.collection('users').authWithOAuth2({ provider: providerName });
-            }
-
-            // 2. Sync Profile Data (Name, Avatar, Email)
-            const meta = authData?.meta;
-            const user = pb.authStore.model;
-
-            console.log("Profile Sync Debug:", { meta, user });
-
-            if (meta && user) {
-                // A. Prepare Name & Avatar update
-                const formData = new FormData();
-                let hasUpdates = false;
-
-                // Name
-                if (meta.name && meta.name !== user.name) {
-                    console.log(`Syncing name: ${user.name} -> ${meta.name}`);
-                    formData.append('name', meta.name);
-                    hasUpdates = true;
-                }
-
-                // Avatar (only if we have a URL)
-                if (meta.avatarUrl) {
-                    console.log("Found avatar URL:", meta.avatarUrl);
-                    try {
-                        const res = await fetch(meta.avatarUrl);
-                        if (res.ok) {
-                            const blob = await res.blob();
-                            console.log("Avatar blob fetched:", blob.size, blob.type);
-                            formData.append('avatar', blob);
-                            hasUpdates = true;
-                        } else {
-                            console.warn("Avatar fetch returned status:", res.status);
-                        }
-                    } catch (fetchErr) {
-                        console.warn("Failed to fetch avatar from social provider (likely CORS)", fetchErr);
-                    }
-                }
-
-                if (hasUpdates) {
-                    try {
-                        console.log("Sending Profile Update (Name/Avatar)...");
-                        await pb.collection('users').update(user.id, formData);
-                        console.log("Profile Update Success");
-                    } catch (updateErr) {
-                        console.error("Failed to update profile", updateErr);
-                    }
-                }
-
-                // B. Sync Email (Separate step to handle uniqueness constraints safely)
-                if (meta.email && meta.email !== user.email) {
-                    try {
-                        console.log(`Syncing email: ${user.email} -> ${meta.email}`);
-                        await pb.collection('users').update(user.id, {
-                            email: meta.email,
-                            emailVisibility: true,
-                        });
-                        console.log("Email Update Success");
-                    } catch (emailErr) {
-                        console.warn("Could not sync email (probably already in use by another account)", emailErr);
-                    }
-                }
-            }
-
+            await authWithOAuth2(providerName);
+            
             // Auth successful, now join
             if (event) {
                 if (event.join_mode !== 'pin') {
-                    // Track join (open/invite modes that auto-succeed via OAuth)
                     const joinedEvents = JSON.parse(localStorage.getItem('joined_events') || '[]');
                     if (!joinedEvents.includes(event.id)) {
                         joinedEvents.push(event.id);
@@ -270,7 +184,6 @@ export default function JoinPage({ code: propCode }: { code?: string }) {
             }
         } catch (err) {
             console.error("OAuth failed", err);
-            // set error?
         } finally {
             setLoading(false);
         }
@@ -282,8 +195,7 @@ export default function JoinPage({ code: propCode }: { code?: string }) {
         if (!event) return;
 
         // Ensure we are authenticated
-        if (authStatus !== 'success' && !pb.authStore.isValid) {
-            // Try one last time? Or showing error is better.
+        if (authStatus !== 'success' && !isAuthenticated()) {
             setAuthError("You must be signed in to join.");
             return;
         }
@@ -297,16 +209,11 @@ export default function JoinPage({ code: propCode }: { code?: string }) {
             setVerifying(true);
             setPinError('');
 
-            // Securely verify PIN by trying to fetch the specific record with matching code AND pin
-            // If we find it, the PIN is correct. We don't want to fetch valid PIN to client.
             try {
-                const records = await pb.collection('events').getList(1, 1, {
-                    filter: `code = "${event.code}" && pin = "${pin}"`
-                });
+                const events = await listEvents();
+                const found = events.find(e => e.code === event.code && e.pin === pin);
 
-                if (records.items.length > 0) {
-                    // Success!
-                    // Track join
+                if (found) {
                     const joinedEvents = JSON.parse(localStorage.getItem('joined_events') || '[]');
                     if (!joinedEvents.includes(event.id)) {
                         joinedEvents.push(event.id);

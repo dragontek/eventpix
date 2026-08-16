@@ -1,11 +1,10 @@
 
 # EventPix
 
-Collect every photo from your event—instantly. **EventPix** is an open‑source, privacy‑first photo sharing platform with realtime feeds, QR joining, simple social sign‑in (Google/Apple), and optional moderation. Built on **PocketBase** with **React + TypeScript** frontends.
+Collect every photo from your event—instantly. **EventPix** is an open‑source, privacy‑first photo sharing platform with realtime feeds, QR joining, simple social sign‑in (Google/Apple), and optional moderation. Built on **Appwrite** with **React + TypeScript** frontends.
 
 - **Website / Landing (Next.js):** `apps/web` (suggested)
 - **Admin / Planner Console (React):** `apps/admin` (suggested)
-- **Backend (PocketBase + migrations):** `backend/`
 - **Docs:** `docs/`
 
 > Full Product Requirements: see **[docs/EventPix_PRD_v0.2.md](docs/EventPix_PRD_v0.2.md)**
@@ -14,7 +13,7 @@ Collect every photo from your event—instantly. **EventPix** is an open‑sourc
 
 ## Features
 - ⚡️ **QR join** or **one‑tap social login** (Google / Sign in with Apple)
-- 🔴 **Realtime** event feed & slideshow (PocketBase subscriptions)
+- 🔴 **Realtime** event feed & slideshow (Appwrite realtime)
 - 🛡️ **Moderation** per event (optional) + **AI quarantine** (optional)
 - 🎨 **Branding** (logo, theme, overlays/frames)
 - 🗂️ **Session folders**, search & duplicate detection
@@ -28,23 +27,18 @@ Collect every photo from your event—instantly. **EventPix** is an open‑sourc
 
 ### 0) Prerequisites
 - **Node.js** 18+ and **pnpm** or **npm**
-- **PocketBase** (download the binary for your OS)
+- **Appwrite** (self‑hosted, or use Appwrite Cloud) with a project created
 - **Git** and **Python** (optional for tooling)
 
-### 1) Backend – PocketBase
-1. Create folders:
+### 1) Backend – Appwrite
+1. Set up a self‑hosted Appwrite instance (or an Appwrite Cloud project).
+2. Create the project and note the **project ID**.
+3. Create an **API key** with full access to databases, storage, users, and auth.
+4. Create the database, collections, and buckets:
    ```bash
-   mkdir -p backend/pb_data backend/pb_migrations
+   pnpm exec node scripts/setup-appwrite-schema.mjs
    ```
-2. Place your PocketBase binary at `backend/pocketbase` (or in PATH).
-3. (If migrations are provided) copy migration files into `backend/pb_migrations/`.
-4. Run migrations and start the server:
-   ```bash
-   cd backend
-   ./pocketbase migrate
-   ./pocketbase serve --http=0.0.0.0:8090
-   ```
-5. Open **Admin UI** at `http://localhost:8090/_/` and create your admin account.
+5. Configure auth providers (Google/Apple) in the Appwrite Console.
 
 ### 2) Frontend – Web (Next.js or React Vite)
 1. Install deps and start dev server (example for Next.js in `apps/web`):
@@ -55,7 +49,8 @@ Collect every photo from your event—instantly. **EventPix** is an open‑sourc
    ```
 2. Configure env (see [`.env.example`](.env.example)):
    ```bash
-   NEXT_PUBLIC_API_BASE_URL=http://localhost:8090
+   NEXT_PUBLIC_APPWRITE_ENDPOINT=https://dragontek.io/v1
+   NEXT_PUBLIC_APPWRITE_PROJECT_ID=your-project-id
    ```
 3. Visit the app at the printed local URL. Create an event in Admin UI, scan the QR, and upload a test photo.
 
@@ -70,11 +65,12 @@ pnpm dev
 ---
 
 ## Environment Variables
-Create a `.env.local` (frontend) and `.env` (backend worker if any). See **[.env.example](.env.example)**
+Create a `.env` (server-side scripts) and `.env.local` (frontends). See **[.env.example](.env.example)**
 
 **Frontend (common):**
 ```bash
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8090
+NEXT_PUBLIC_APPWRITE_ENDPOINT=https://dragontek.io/v1
+NEXT_PUBLIC_APPWRITE_PROJECT_ID=your-project-id
 NEXT_PUBLIC_APP_NAME=EventPix
 ```
 
@@ -101,10 +97,11 @@ APPLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 ├─ apps/
 │  ├─ web/            # Guest app (Next.js or Vite React)
 │  └─ admin/          # Planner console (React)
-├─ backend/
-│  ├─ pb_data/        # PocketBase data (gitignored)
-│  ├─ pb_migrations/  # PocketBase migrations
-│  └─ pocketbase      # PocketBase binary (local dev)
+├─ libs/
+│  └─ db/             # Shared database/provider layer (Appwrite)
+├─ scripts/
+│  ├─ setup-appwrite-schema.mjs  # Create DB/collections/buckets
+│  └─ appwrite-build-web.sh      # Standalone build for Appwrite Sites
 ├─ docs/
 │  └─ EventPix_PRD_v0.2.md
 ├─ .env.example
@@ -114,7 +111,7 @@ APPLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 ---
 
 ## Self‑Host Notes (Production)
-- Place PocketBase behind a reverse proxy (TLS); configure backups for `pb_data/`.
+- Self‑host Appwrite behind a reverse proxy (TLS); configure backups.
 - Enable **signed URLs** for original downloads and set **retention** policies per event.
 - Use a CDN for thumbnails if hosting the SaaS version.
 

@@ -1,7 +1,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSnackbar } from 'notistack';
-import { pb } from '@/lib/pocketbase';
+import { getPhotoUrl, deletePhoto, updatePhotoStatus, updatePhoto } from '@/lib/db';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -14,15 +14,8 @@ interface PhotoCardProps {
 }
 
 export default function PhotoCard({ photo, currentUserId, eventOwnerId, onPhotoClick }: PhotoCardProps & { onPhotoClick?: () => void }) {
-    // Debug permissions
-    // console.log(`Photo ${ photo.id }: `, { isOwner, isHost, currentUserId, photoOwner: photo.owner, eventOwner: eventOwnerId });
-    // Detailed debug for long press issue
-    // useEffect(() => {
-    //    if (showControls) console.log("Controls Shown. Owner:", photo.owner, "Current:", currentUserId, "Match:", currentUserId === photo.owner);
-    // }, [showControls]);
-
     const { enqueueSnackbar } = useSnackbar();
-    const url = pb.files.getURL(photo, photo.file);
+    const url = getPhotoUrl(photo);
     const isOwner = currentUserId && currentUserId === photo.owner;
     const ownerName = isOwner ? 'You' : (photo.expand?.owner?.name || photo.expand?.owner?.email || 'Guest');
 
@@ -81,7 +74,7 @@ export default function PhotoCard({ photo, currentUserId, eventOwnerId, onPhotoC
 
     const confirmDelete = async () => {
         try {
-            await pb.collection('photos').delete(photo.id);
+            await deletePhoto(photo.id);
             setIsDeleting(false);
         } catch (err) {
             console.error(err);
@@ -92,7 +85,7 @@ export default function PhotoCard({ photo, currentUserId, eventOwnerId, onPhotoC
 
     const handleUpdateCaption = async () => { // Renamed from handleSaveCaption
         try {
-            await pb.collection('photos').update(photo.id, { caption: caption }); // Using new caption state
+            await updatePhoto(photo.id, { caption: caption });
             setIsEditing(false);
         } catch (err) {
             console.error(err);
@@ -128,7 +121,7 @@ export default function PhotoCard({ photo, currentUserId, eventOwnerId, onPhotoC
             : [...likes, currentUserId];
 
         try {
-            await pb.collection('photos').update(photo.id, { likes: newLikes });
+            await updatePhoto(photo.id, { likes: newLikes });
         } catch (err) {
             console.error("Like failed", err);
         }

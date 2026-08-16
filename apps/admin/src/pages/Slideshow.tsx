@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Image, Center, Loader, Title } from '@mantine/core';
 import { useData } from '../providers/DataProvider';
-import type { Photo } from '../providers/types';
+import type { Photo } from '@eventpix/db';
 
 export default function Slideshow() {
     const { id } = useParams();

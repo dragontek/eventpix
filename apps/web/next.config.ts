@@ -1,7 +1,5 @@
 import type { NextConfig } from "next";
 
-const isGithubPages = process.env.GITHUB_PAGES === 'true';
-
 const nextConfig: NextConfig = {
   output: 'standalone',
   transpilePackages: [
@@ -14,10 +12,9 @@ const nextConfig: NextConfig = {
     unoptimized: true,
     remotePatterns: [
       {
-        protocol: 'http',
-        hostname: 'localhost',
-        port: '8090',
-        pathname: '/api/files/**',
+        protocol: 'https',
+        hostname: 'dragontek.io',
+        pathname: '/v1/storage/**',
       },
     ],
   },

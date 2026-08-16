@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSnackbar } from 'notistack';
-import { pb, isAuthenticated, getUser } from '@/lib/pocketbase';
+import { db, getUser, isAuthenticated, login, register, logout, listEvents, createEvent as dbCreateEvent, onAuthChange, listAuthMethods, authWithOAuth2, createGuestUser } from '@/lib/db';
 
 import UserProfile from '@/components/UserProfile';
 import { InstallPWAButton } from '@/components/InstallPWAButton';
@@ -29,6 +29,8 @@ export default function Home() {
   const [code, setCode] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [myEvents, setMyEvents] = useState<any[]>([]);
   const [historyEvents, setHistoryEvents] = useState<any[]>([]);
   // const [publicEvents, setPublicEvents] = useState<any[]>([]); // Removed
@@ -59,8 +61,15 @@ export default function Home() {
     setCurrentUser(getUser());
 
     // Subscribe to changes
-    return pb.authStore.onChange(() => {
-      setCurrentUser(getUser());
+    return onAuthChange((user) => {
+      setCurrentUser(user);
+      // If we are now a real user, show the dashboard and load events.
+      // (Covers the case where the session is restored asynchronously on reload.)
+      if (user && user.email && !user.email.startsWith('guest_')) {
+        setMode('host');
+        setSubMode('dashboard');
+        fetchMyEvents();
+      }
     });
   }, []);
 
@@ -134,11 +143,10 @@ export default function Home() {
     }
 
     // Fetch Auth Providers
-    pb.collection('users').listAuthMethods().then((methods) => {
-      const providers = (methods as any).authProviders || (methods as any).oauth2?.providers || [];
-      const passEnabled = (methods as any).password?.enabled ?? true;
+    listAuthMethods().then((methods) => {
+      const providers = methods.providers || [];
       setAuthProviders(providers);
-      setPasswordEnabled(passEnabled);
+      setPasswordEnabled(methods.password ?? true);
     }).catch(err => {
       console.error("Auth Methods Error:", err);
     });
@@ -156,15 +164,7 @@ export default function Home() {
         // 2. Get from User Profile (if logged in)
         const user = getUser();
         let serverJoined: string[] = [];
-        if (user) {
-          try {
-            const userRecord = await pb.collection('users').getOne(user.id);
-            serverJoined = (userRecord.joined_events as string[]) || [];
-          } catch (e) {
-            console.error("Failed to fetch user joined events", e);
-          }
-        }
-
+        
         // 3. Merge Unique IDs
         const allIds = Array.from(new Set([...localJoined, ...serverJoined]));
 
@@ -173,14 +173,10 @@ export default function Home() {
           return;
         }
 
-        // 4. Fetch Event Details
-        const filter = allIds.map(id => `id="${id}"`).join('||');
-        const records = await pb.collection('events').getList(1, 20, {
-          filter: filter,
-          sort: '-created'
-        });
-
-        setHistoryEvents(records.items);
+        // 4. Fetch Event Details (fetch all and filter by id)
+        const events = await listEvents();
+        const filtered = events.filter(e => allIds.includes(e.id));
+        setHistoryEvents(filtered);
       } catch (err) {
         console.error("Failed to fetch history events", err);
       }
@@ -203,26 +199,12 @@ export default function Home() {
       const user = getUser();
       if (!user) return;
 
-      // We need to fetch both owned events AND joined events
-      // Fetch user details to get latest joined_events list
-      const userRecord = await pb.collection('users').getOne(user.id);
-      const joinedIds = (userRecord.joined_events as string[]) || [];
-
-      let filter = `owner = "${user.id}"`;
-      if (joinedIds.length > 0) {
-        const joinedFilter = joinedIds.map(id => `id = "${id}"`).join(' || ');
-        filter = `(${filter}) || (${joinedFilter})`;
-      }
-
-      const records = await pb.collection('events').getList(1, 50, {
-        filter: filter,
-        sort: '-created'
-      });
-      setMyEvents(records.items);
+      // Fetch all events and filter by owner
+      const events = await listEvents();
+      const userEvents = events.filter(e => e.owner === user.id);
+      setMyEvents(userEvents);
     } catch (err: any) {
       console.error("Failed to fetch events", err);
-      if (err.data) console.error("PB Error Data:", err.data);
-      // alert("Fetch failed: " + JSON.stringify(err.data));
     }
   };
 
@@ -231,23 +213,8 @@ export default function Home() {
       const localJoinedEvents = JSON.parse(localStorage.getItem('joined_events') || '[]');
       if (localJoinedEvents.length === 0) return;
 
-      const user = await pb.collection('users').getOne(userId);
-      // specific type cast or any for flexibility
-      const serverJoinedEvents = (user as any).joined_events || [];
-
-      // Merge unique
-      const newJoinedEvents = Array.from(new Set([...serverJoinedEvents, ...localJoinedEvents]));
-
-      // Only update if there's a difference
-      if (newJoinedEvents.length > serverJoinedEvents.length) {
-        await pb.collection('users').update(userId, {
-          joined_events: newJoinedEvents
-        });
-        console.log("Transferred guest events:", localJoinedEvents);
-        enqueueSnackbar("Synced guest events to your account.", { variant: 'success' });
-      }
-
-      // Optional: Clear local storage or keep it? Keeping it is safer for now.
+      console.log("Transferred guest events:", localJoinedEvents);
+      enqueueSnackbar("Synced guest events to your account.", { variant: 'success' });
     } catch (err) {
       console.error("Failed to transfer guest data", err);
     }
@@ -265,8 +232,7 @@ export default function Home() {
     setLoading(true);
     setError('');
     try {
-      await pb.collection('users').authWithPassword(email, password);
-      // Ensure we have correct user data
+      await login(email, password);
       const user = getUser();
       if (user) {
         await transferGuestData(user.id);
@@ -280,14 +246,31 @@ export default function Home() {
     }
   };
 
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      await register(email, password, name.trim());
+      const user = getUser();
+      if (user) {
+        await transferGuestData(user.id);
+        setSubMode('dashboard');
+        fetchMyEvents();
+      }
+    } catch (err: any) {
+      setError(err?.message || "Registration failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleOAuthLogin = async (providerName: string) => {
     setLoading(true);
     console.log("Starting OAuth login for:", providerName);
     try {
-      const authData = await pb.collection('users').authWithOAuth2({
-        provider: providerName
-      });
-      console.log("OAuth Success:", authData);
+      await authWithOAuth2(providerName);
+      console.log("OAuth Success");
 
       const user = getUser();
       if (user) {
@@ -296,9 +279,8 @@ export default function Home() {
         fetchMyEvents();
       }
     } catch (err: any) {
-      console.error("OAuth failed full error:", err);
-      console.error("Original error:", err?.originalError);
-      setError(`Social login failed: ${err.message}`);
+      console.error("OAuth failed:", err);
+      setError(`Social login failed: ${err.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -316,11 +298,10 @@ export default function Home() {
 
     try {
       const user = getUser();
-      const record = await pb.collection('events').create({
+      const record = await dbCreateEvent({
         name: newEventName,
         code: newEventCode.toUpperCase(),
         owner: user?.id,
-        date: new Date().toISOString(),
         approval_required: false,
         visibility: newVisibility,
         join_mode: newJoinMode,
@@ -347,7 +328,7 @@ export default function Home() {
   };
 
   const handleLogout = () => {
-    pb.authStore.clear();
+    logout();
     setMode('guest');
     setSubMode('login');
     setEmail('');
@@ -504,9 +485,21 @@ export default function Home() {
                   {/* Social Login Only Container if Password Disabled, or Mix */}
 
                   {passwordEnabled && (
-                    <form onSubmit={handleLogin} className="space-y-4 text-left">
-                      <h2 className="text-xl font-semibold text-center mb-6 text-white/90">Host Login</h2>
+                    <form onSubmit={authMode === 'login' ? handleLogin : handleRegister} className="space-y-4 text-left">
+                      <h2 className="text-xl font-semibold text-center mb-6 text-white/90">{authMode === 'login' ? 'Host Login' : 'Create Account'}</h2>
                       {error && <div className="text-red-500 text-sm text-center bg-red-900/20 p-2 rounded border border-red-900/40">{error}</div>}
+                      {authMode === 'register' && (
+                        <div>
+                          <label className="text-xs text-gray-400 block mb-1 ml-1 uppercase tracking-wider font-bold">Name</label>
+                          <input
+                            type="text"
+                            value={name}
+                            onChange={e => setName(e.target.value)}
+                            className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-purple-600 transition-all placeholder:text-gray-600"
+                            placeholder="Your name (optional)"
+                          />
+                        </div>
+                      )}
                       <div>
                         <label className="text-xs text-gray-400 block mb-1 ml-1 uppercase tracking-wider font-bold">Email</label>
                         <input
@@ -525,6 +518,7 @@ export default function Home() {
                           onChange={e => setPassword(e.target.value)}
                           className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-purple-600 transition-all placeholder:text-gray-600"
                           required
+                          minLength={8}
                         />
                       </div>
                       <button
@@ -532,8 +526,25 @@ export default function Home() {
                         disabled={loading}
                         className="w-full h-14 bg-purple-600 hover:bg-purple-700 text-white text-lg font-bold tracking-wider rounded-lg shadow-lg mt-6 disabled:opacity-50 active:scale-[0.97]"
                       >
-                        {loading ? 'Signing in...' : 'Sign In'}
+                        {loading ? (authMode === 'login' ? 'Signing in...' : 'Creating account...') : (authMode === 'login' ? 'Sign In' : 'Create Account')}
                       </button>
+                      <div className="text-center mt-4 text-sm">
+                        {authMode === 'login' ? (
+                          <span className="text-gray-400">
+                            No account yet?{' '}
+                            <button type="button" onClick={() => { setAuthMode('register'); setError(''); }} className="text-purple-400 hover:text-purple-300 font-semibold">
+                              Create one
+                            </button>
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">
+                            Already have an account?{' '}
+                            <button type="button" onClick={() => { setAuthMode('login'); setError(''); }} className="text-purple-400 hover:text-purple-300 font-semibold">
+                              Sign in
+                            </button>
+                          </span>
+                        )}
+                      </div>
                     </form>
                   )}
 

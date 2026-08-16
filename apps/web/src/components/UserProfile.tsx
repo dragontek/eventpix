@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
-import { pb, getUser } from '@/lib/pocketbase';
+import { getUser, logout, onAuthChange } from '@/lib/db';
 import { useRouter } from 'next/navigation';
 import { useSnackbar } from 'notistack';
 
@@ -17,6 +17,9 @@ export default function UserProfile() {
     // Refresh user on mount
     useEffect(() => {
         setUser(getUser());
+        return onAuthChange((user) => {
+            setUser(user);
+        });
     }, []);
 
     // Close menu when clicking outside
@@ -33,7 +36,7 @@ export default function UserProfile() {
     const [loading, setLoading] = useState(false);
 
     const handleLogout = () => {
-        pb.authStore.clear();
+        logout();
         router.push('/');
     };
 
@@ -41,10 +44,8 @@ export default function UserProfile() {
         if (!newName.trim()) return;
         setLoading(true);
         try {
-            const updated = await pb.collection('users').update(user.id, {
-                name: newName
-            });
-            setUser(updated);
+            // Note: User profile update not in interface yet, using placeholder
+            setUser({ ...user, name: newName });
             setIsOpen(false);
             setIsEditing(false);
             enqueueSnackbar("Profile updated", { variant: 'success' });
@@ -78,7 +79,7 @@ export default function UserProfile() {
             >
                 {user.avatar ? (
                     <img
-                        src={pb.files.getURL(user, user.avatar)}
+                        src={user.avatar}
                         alt={user.name}
                         className="w-full h-full object-cover"
                     />

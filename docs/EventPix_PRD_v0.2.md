@@ -7,7 +7,7 @@
 ---
 
 ## Executive Summary
-EventPix is an open‑source, privacy‑first photo‑sharing platform. It enables event hosts and planners to collect photos from attendees in real time via **QR‑code joining** and **simple social sign‑in (Google/Apple)**, with an approval workflow, branding options, and post‑event exports. The core is built on **PocketBase** for simple self‑hosting and realtime subscriptions; the frontends (guest app and admin/planner console) are built with **React + TypeScript**. A hosted SaaS adds higher storage limits, AI‑assisted moderation, analytics, and org/team features.
+EventPix is an open‑source, privacy‑first photo‑sharing platform. It enables event hosts and planners to collect photos from attendees in real time via **QR‑code joining** and **simple social sign‑in (Google/Apple)**, with an approval workflow, branding options, and post‑event exports. The core is built on **Appwrite** for simple self‑hosting, auth, storage, and realtime subscriptions; the frontends (guest app and admin/planner console) are built with **React + TypeScript**. A hosted SaaS adds higher storage limits, AI‑assisted moderation, analytics, and org/team features.
 
 ---
 
@@ -17,8 +17,8 @@ EventPix is an open‑source, privacy‑first photo‑sharing platform. It enabl
 3. [User Stories (selected)](#3-user-stories-selected)  
 4. [Functional Requirements – Guest App (React)](#4-functional-requirements--guest-app-react)  
 5. [Functional Requirements – Host/Admin (Planner Console)](#5-functional-requirements--hostadmin-planner-console)  
-6. [Information Architecture & Data Model (PocketBase)](#6-information-architecture--data-model-pocketbase)  
-7. [API Contract (App ↔ PocketBase)](#7-api-contract-app--pocketbase)  
+6. [Information Architecture & Data Model (Appwrite)](#6-information-architecture--data-model-appwrite)  
+7. [API Contract (App ↔ Appwrite)](#7-api-contract-app--appwrite)  
 8. [Non‑Functional Requirements](#8-non-functional-requirements)  
 9. [UI/UX Requirements – React Components](#9-uiux-requirements--react-components)  
 10. [Analytics & Telemetry](#10-analytics--telemetry)  
@@ -93,7 +93,7 @@ EventPix is an open‑source, privacy‑first photo‑sharing platform. It enabl
 
 ### 4.3 Realtime Feed
 - Own uploads appear immediately as **Pending** (or **Visible** if moderation disabled).
-- Feed updates via **PocketBase subscriptions**; only approved items visible to others when moderation is on.
+- Feed updates via **Appwrite realtime subscriptions**; only approved items visible to others when moderation is on.
 
 ### 4.4 Privacy & Consent
 - Display “house rules” before first upload.
@@ -140,7 +140,7 @@ EventPix is an open‑source, privacy‑first photo‑sharing platform. It enabl
 
 ---
 
-## 6. Information Architecture & Data Model (PocketBase)
+## 6. Information Architecture & Data Model (Appwrite)
 - Collections: `users` (auth), `orgs`, `events`, `memberships`, `invitations`, `photos`, `moderation_queue`, `reactions`, `comments`, `albums`, `overlays`, `subscriptions`, `export_jobs`.
 - `users`: `provider` (enum), `provider_id` (string), `display_name` (text), `avatar` (file/url).
 - `events`: `visibility`, `join_mode`, `approval_required` (bool), `allow_anonymous_uploads` (bool), `strip_exif` (bool), `allow_downloads` (bool), `storage_limit_mb`/`storage_used_mb`, `view_only` (bool), `default_template` (enum), `moderation_profile` (json).
@@ -150,10 +150,10 @@ EventPix is an open‑source, privacy‑first photo‑sharing platform. It enabl
 
 ---
 
-## 7. API Contract (App ↔ PocketBase)
-- **Auth:** social OAuth/OIDC (**Google/Apple**). Minimal scopes to obtain **name, avatar, email**. Anonymous session allowed if event permits.
-- **Subscriptions:** realtime on `photos` (event‑scoped) and `moderation_queue`; slideshow subscribes to approved stream.
-- **Uploads:** multipart to `photos.file`; server computes thumbnails, `phash`, parses/strips EXIF.
+## 7. API Contract (App ↔ Appwrite)
+- **Auth:** social OAuth/OIDC (**Google/Apple**) via Appwrite auth providers. Minimal scopes to obtain **name, avatar, email**. Anonymous session allowed if event permits.
+- **Subscriptions:** Appwrite realtime on `photos` (event‑scoped) and `moderation_queue`; slideshow subscribes to approved stream.
+- **Uploads:** multipart to Appwrite Storage; server computes thumbnails, `phash`, parses/strips EXIF.
 - **Moderation endpoints:** approve/reject/quarantine; reason codes; emit webhooks (cloud).
 - **Exports:** `POST export_jobs` → background zip; `GET` when ready returns signed URL; includes **CSV manifest**.
 
@@ -210,7 +210,7 @@ EventPix is an open‑source, privacy‑first photo‑sharing platform. It enabl
 ---
 
 ## 11. Rollout & Packaging
-- Open‑source core repos: **app (React)** + **backend (PocketBase migrations)** + **media worker**.
+- Open‑source core repos: **app (React)** + **backend (Appwrite schema/tooling)** + **media worker**.
 - Docker Compose for self‑host; Vercel for marketing; CI with preview deployments.
 - Feature flags: AI moderation, slideshow v2, sponsor analytics.
 
@@ -253,7 +253,7 @@ sequenceDiagram
   participant U as User (Guest)
   participant W as Web App (React)
   participant OP as OAuth Provider (Google/Apple)
-  participant PB as PocketBase
+  participant AS as Appwrite
 
   U->>W: Open Join Page (from QR or link)
   W-->>U: Show buttons (Google/Apple) + QR/PIN option
@@ -261,15 +261,15 @@ sequenceDiagram
     U->>W: Click "Continue with Google/Apple"
     W->>OP: Start OAuth (OIDC) auth code flow
     OP-->>W: Auth code (redirect)
-    W->>PB: Exchange code → tokens; fetch profile (name, avatar, email)
-    PB-->>W: Upsert user {provider, provider_id, display_name, avatar, email}
-    W->>PB: Create/confirm membership for event (role=guest)
-    PB-->>W: Session + event access granted
+    W->>AS: Exchange code → tokens; fetch profile (name, avatar, email)
+    AS-->>W: Upsert user {provider, provider_id, display_name, avatar, email}
+    W->>AS: Create/confirm membership for event (role=guest)
+    AS-->>W: Session + event access granted
     W-->>U: Joined & ready to upload
   else QR/PIN
     U->>W: Enter PIN (optional) / Proceed
-    W->>PB: Request anonymous session (if allowed)
-    PB-->>W: Session + event access granted
+    W->>AS: Request anonymous session (if allowed)
+    AS-->>W: Session + event access granted
     W-->>U: Joined & ready to upload
   end
 ```
@@ -280,24 +280,24 @@ sequenceDiagram
   autonumber
   participant H as Host/Planner
   participant W as Admin Console (React)
-  participant PB as PocketBase
+  participant AS as Appwrite
   participant G as Guest App (React)
 
   H->>W: Create Event (name, dates, visibility, template)
-  W->>PB: POST /events {approval_required, view_only, ...}
-  PB-->>W: Event created + join link + QR
+  W->>AS: Create event document {approval_required, view_only, ...}
+  AS-->>W: Event created + join link + QR
   W-->>H: Display QR / share link
 
-  Note over G,PB: Guest joins (Login/QR) and gets event access
-  G->>PB: POST /photos (file + metadata)
-  PB-->>G: Photo stored (status=pending or visible)
+  Note over G,AS: Guest joins (Login/QR) and gets event access
+  G->>AS: Upload photo (file + metadata)
+  AS-->>G: Photo stored (status=pending or visible)
   alt Moderation ON
-    PB-->>W: New item in moderation_queue
+    AS-->>W: New item in moderation_queue
     H->>W: Approve/Reject (keyboard shortcuts)
-    W->>PB: PATCH /photos/{id} status=approved|rejected
-    PB-->>G: Subscription update → feed refresh
+    W->>AS: Update photo status=approved|rejected
+    AS-->>G: Realtime update → feed refresh
   else Moderation OFF
-    PB-->>G: Subscription update → photo visible to all
+    AS-->>G: Realtime update → photo visible to all
   end
 
   Note over H,G: Slideshow subscribes to approved photos stream
@@ -309,17 +309,17 @@ sequenceDiagram
   autonumber
   participant H as Host/Planner
   participant W as Admin Console (React)
-  participant PB as PocketBase
+  participant AS as Appwrite
   participant J as Export Worker
 
   H->>W: Close event / Create export (approved or all)
-  W->>PB: POST /export_jobs {event_id, scope}
-  PB->>J: Queue export job
-  J->>PB: Stream photos → create ZIP + CSV manifest
-  PB-->>W: Job status=ready + signed download URL (expires)
+  W->>AS: Create export_jobs {event_id, scope}
+  AS->>J: Queue export job
+  J->>AS: Stream photos → create ZIP + CSV manifest
+  AS-->>W: Job status=ready + signed download URL (expires)
   W-->>H: Notify (UI/email) with link
-  H->>PB: Download ZIP via signed URL
-  PB-->>H: ZIP delivered
+  H->>AS: Download ZIP via signed URL
+  AS-->>H: ZIP delivered
 ```
 
 ---

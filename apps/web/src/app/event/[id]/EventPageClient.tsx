@@ -2,15 +2,19 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { pb, isAuthenticated, getUser } from '@/lib/pocketbase';
 import { useSnackbar } from 'notistack';
+import { 
+    db, getUser, isAuthenticated, getPhotoUrl, createPhoto as dbCreatePhoto, 
+    listEventPhotos, listApprovedPhotos, updateEvent as dbUpdateEvent, deleteEvent as dbDeleteEvent,
+    subscribeToPhotos, listInvitations, onAuthChange 
+} from '@/lib/db';
 import PhotoCard from '@/components/PhotoCard';
 import UserProfile from '@/components/UserProfile';
 import QRCode from "react-qr-code";
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 
 // Helper for datetime-local input
-const toLocalISO = (dateStr: string) => {
+const toLocalISO = (dateStr?: string) => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
     const offset = date.getTimezoneOffset() * 60000;
@@ -160,21 +164,13 @@ export default function EventPage({ id: propId }: { id?: string }) {
 
         for (const file of files) {
             try {
-                const formData = new FormData();
-                formData.append('file', file);
-                formData.append('event', id);
                 const userId = getUser()?.id;
                 const isOwner = event?.owner && userId === event.owner;
 
-                if (userId) {
-                    formData.append('owner', userId);
-                }
-
                 // Auto-approve if owner, otherwise check event settings
                 const status = (event?.approval_required && !isOwner) ? 'pending' : 'approved';
-                formData.append('status', status);
-
-                await pb.collection('photos').create(formData);
+                
+                await dbCreatePhoto(event.id, file, { status, owner: userId });
                 successCount++;
 
             } catch (err) {
@@ -208,8 +204,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
         const loadEvent = async () => {
             try {
                 // Fetch event
-                const eventRecord = await pb.collection('events').getOne(id);
-                // Do NOT set event state yet.
+                const eventRecord = await db.getEvent(id);
 
                 // Check Access Control
                 if (eventRecord.join_mode === 'invite_only') {
@@ -224,10 +219,10 @@ export default function EventPage({ id: propId }: { id?: string }) {
                         // Owner always allowed
                     } else {
                         try {
-                            const invites = await pb.collection('invitations').getList(1, 1, {
-                                filter: `event = "${id}" && email = "${user?.email}"`
-                            });
-                            if (invites.items.length === 0) {
+                            const invites = await listInvitations(id);
+                            const userEmail = user?.email;
+                            const hasInvite = invites.some(inv => inv.email === userEmail);
+                            if (!hasInvite) {
                                 setError("Access Denied: You are not on the guest list.");
                                 setLoading(false);
                                 return;
@@ -248,9 +243,6 @@ export default function EventPage({ id: propId }: { id?: string }) {
                         // Redirect to Join Page with Code
                         console.log("PIN required, redirecting to join page...");
                         router.push(`/join/${eventRecord.code}`);
-                        // Do NOT set event state.
-                        // Do NOT set loading to false.
-                        // allow redirect to happen while showing loading spinner
                         return;
                     }
                 }
@@ -266,84 +258,54 @@ export default function EventPage({ id: propId }: { id?: string }) {
                 setEditEndDate(toLocalISO(eventRecord.end_date));
 
                 // Fetch photos
-                const photoRecords = await pb.collection('photos').getFullList({
-                    filter: `event = "${id}" && status = "approved"`,
-                    sort: '-created',
-                    expand: 'owner'
-                });
+                const photoRecords = await listApprovedPhotos(id);
                 setPhotos(photoRecords);
 
                 // Update loading state only after everything is ready
                 setLoading(false);
 
                 // Subscribe to realtime updates
-                pb.collection('photos').subscribe('*', async function (e) {
+                const unsubscribe = subscribeToPhotos(async function (e) {
                     if (e.record.event !== id) return;
 
                     if (e.action === 'create') {
                         if (e.record.status === 'approved') {
-                            try {
-                                const expandedRecord = await pb.collection('photos').getOne(e.record.id, {
-                                    expand: 'owner'
-                                });
-                                setPhotos((prev) => {
-                                    if (prev.some(p => p.id === expandedRecord.id)) return prev;
-                                    return [expandedRecord, ...prev];
-                                });
-                            } catch (err) {
-                                console.error("Failed to expand realtime photo", err);
-                                setPhotos((prev) => {
-                                    if (prev.some(p => p.id === e.record.id)) return prev;
-                                    return [e.record, ...prev];
-                                });
-                            }
+                            setPhotos((prev) => {
+                                if (prev.some(p => p.id === e.record.id)) return prev;
+                                return [e.record, ...prev];
+                            });
                         }
                     } else if (e.action === 'update') {
                         if (e.record.status === 'approved') {
-                            // If it's already in the list, update it (caption change, likes, etc)
-                            // If it's NOT in the list (just approved), add it.
                             setPhotos((prev) => {
                                 const exists = prev.some(p => p.id === e.record.id);
                                 if (exists) {
                                     return prev.map(p => p.id === e.record.id ? { ...p, ...e.record } : p);
                                 } else {
-                                    return prev; // Return prev, and let the async block below handle adding.
+                                    return prev;
                                 }
                             });
-
-                            // Now for the "Add if missing" case:
-                            try {
-                                const expandedRecord = await pb.collection('photos').getOne(e.record.id, {
-                                    expand: 'owner'
-                                });
-                                setPhotos((prev) => {
-                                    if (prev.some(p => p.id === expandedRecord.id)) {
-                                        // Update existing with full expanded data
-                                        return prev.map(p => p.id === expandedRecord.id ? expandedRecord : p);
-                                    }
-                                    // Add new
-                                    return [expandedRecord, ...prev];
-                                });
-                            } catch (err) {
-                                console.error("Failed to fetch updated photo", err);
-                            }
-
+                            setPhotos((prev) => {
+                                if (prev.some(p => p.id === e.record.id)) {
+                                    return prev.map(p => p.id === e.record.id ? { ...p, ...e.record } : p);
+                                }
+                                return [e.record, ...prev];
+                            });
                         } else {
-                            // Status is NOT approved (e.g. rejected or hidden)
-                            // Animate exit then remove
                             setPhotos((prev) => prev.map(p => p.id === e.record.id ? { ...p, _isExiting: true } : p));
                             setTimeout(() => {
                                 setPhotos((prev) => prev.filter((p) => p.id !== e.record.id));
                             }, 500);
                         }
                     } else if (e.action === 'delete') {
-                        // Animate exit then remove
                         setPhotos((prev) => prev.map(p => p.id === e.record.id ? { ...p, _isExiting: true } : p));
                         setTimeout(() => {
                             setPhotos((prev) => prev.filter((p) => p.id !== e.record.id));
                         }, 500);
                     }
                 });
+
+                return () => unsubscribe();
 
             } catch (err) {
                 console.error("Error loading event", err);
@@ -355,10 +317,6 @@ export default function EventPage({ id: propId }: { id?: string }) {
         if (id) {
             loadEvent();
         }
-
-        return () => {
-            pb.collection('photos').unsubscribe();
-        };
     }, [id]);
 
     const handleUpdateEvent = async () => {
@@ -371,7 +329,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
         }
 
         try {
-            await pb.collection('events').update(event.id, {
+            await dbUpdateEvent(event.id, {
                 name: editEventName,
                 visibility: editVisibility,
                 join_mode: editJoinMode,
@@ -403,7 +361,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
         if (!confirm('Are you sure you want to delete this event? This cannot be undone.')) return;
 
         try {
-            await pb.collection('events').delete(event.id);
+            await dbDeleteEvent(event.id);
             router.push('/');
         } catch (err) {
             console.error(err);
@@ -804,7 +762,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
                         <div className="relative w-full h-full max-w-7xl max-h-[85vh] flex items-center justify-center">
                             <img
                                 key={photos[selectedPhotoIndex].id}
-                                src={pb.files.getURL(photos[selectedPhotoIndex], photos[selectedPhotoIndex].file)}
+                                src={getPhotoUrl(photos[selectedPhotoIndex])}
                                 alt={photos[selectedPhotoIndex].caption || "Event Photo"}
                                 className="max-w-full max-h-full object-contain animate-fade-in"
                             />

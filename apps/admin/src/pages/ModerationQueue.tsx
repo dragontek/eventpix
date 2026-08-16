@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Title, SimpleGrid, Card, Image, Group, Button, Text, Badge, Loader, Center } from '@mantine/core';
 import { IconCheck, IconX } from '@tabler/icons-react';
 import { useData } from '../providers/DataProvider';
-import type { Photo } from '../providers/types';
+import type { Photo } from '@eventpix/db';
 import { notifications } from '@mantine/notifications';
 
 export default function ModerationQueue() {
