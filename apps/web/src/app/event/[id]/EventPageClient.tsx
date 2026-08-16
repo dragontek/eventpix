@@ -4,9 +4,9 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSnackbar } from 'notistack';
 import { 
-    db, getUser, isAuthenticated, getPhotoUrl, createPhoto as dbCreatePhoto, 
+    db, getUser, getCurrentUser, isAuthenticated, getPhotoUrl, createPhoto as dbCreatePhoto, 
     listEventPhotos, listApprovedPhotos, updateEvent as dbUpdateEvent, deleteEvent as dbDeleteEvent,
-    subscribeToPhotos, listInvitations, onAuthChange 
+    subscribeToPhotos, listInvitations, onAuthChange, listAuthMethods, authWithOAuth2, getAvatarUrl 
 } from '@/lib/db';
 import PhotoCard from '@/components/PhotoCard';
 import UserProfile from '@/components/UserProfile';
@@ -32,6 +32,12 @@ export default function EventPage({ id: propId }: { id?: string }) {
     const [error, setError] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
+    const [authProviders, setAuthProviders] = useState<any[]>([]);
+
+    // Reactive current user: getUser() returns the in-memory cache which may be
+    // empty until the session is refreshed, so keep it in state and subscribe.
+    const [currentUser, setCurrentUser] = useState<any>(() => getUser());
+    useEffect(() => onAuthChange((user) => setCurrentUser(user)), []);
 
     // Edit State
     const [isEditingEvent, setIsEditingEvent] = useState(false);
@@ -164,7 +170,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
 
         for (const file of files) {
             try {
-                const userId = getUser()?.id;
+                const userId = currentUser?.id;
                 const isOwner = event?.owner && userId === event.owner;
 
                 // Auto-approve if owner, otherwise check event settings
@@ -188,7 +194,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
             enqueueSnackbar(msg, { variant: 'success' });
 
             // Check if any need approval (heuristic: if not owner and approval required)
-            const userId = getUser()?.id;
+            const userId = currentUser?.id;
             const isOwner = event?.owner && userId === event.owner;
             if (event?.approval_required && !isOwner) {
                 enqueueSnackbar("Waiting for host approval.", { variant: 'info' });
@@ -198,6 +204,12 @@ export default function EventPage({ id: propId }: { id?: string }) {
             enqueueSnackbar(`Uploaded ${successCount} of ${files.length} photos.`, { variant: 'warning' });
         }
     };
+
+    useEffect(() => {
+        listAuthMethods().then((methods) => {
+            setAuthProviders(methods.providers || []);
+        }).catch(err => console.error("Failed to fetch auth providers", err));
+    }, []);
 
     // Restoring missing fetch logic
     useEffect(() => {
@@ -213,7 +225,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
                         setLoading(false);
                         return; // Will show restricted UI
                     }
-                    const user = getUser();
+                    const user = await getCurrentUser();
                     // Check if invited OR owner
                     if (eventRecord.owner === user?.id) {
                         // Owner always allowed
@@ -245,6 +257,10 @@ export default function EventPage({ id: propId }: { id?: string }) {
                         router.push(`/join/${eventRecord.code}`);
                         return;
                     }
+                } else if (eventRecord.visibility === 'private' && !isAuthenticated()) {
+                    // Private events require going through the join flow first
+                    router.push(`/join/${eventRecord.code}`);
+                    return;
                 }
 
                 // If we got here, access is granted.
@@ -374,14 +390,52 @@ export default function EventPage({ id: propId }: { id?: string }) {
     // Auth Required for Invite Only
     if (event?.join_mode === 'invite_only' && !isAuthenticated()) {
         return (
-            <div className="flex flex-col h-screen items-center justify-center text-white p-4 space-y-4">
-                <h1 className="text-2xl font-bold">{event.name}</h1>
-                <p className="text-gray-400">This event is invite-only.</p>
+            <div className="flex flex-col min-h-screen items-center justify-center text-white p-4 space-y-4">
+                <h1 className="text-2xl font-bold text-center">{event.name}</h1>
+                <p className="text-gray-400">This event is invite-only. Sign in to access the album.</p>
+                <div className="w-full max-w-xs space-y-3">
+                    {authProviders.map((p) => {
+                        const isGoogle = p.name === 'google';
+                        const isApple = p.name === 'apple';
+                        let buttonClass = "w-full font-bold py-3 px-8 rounded-lg transition flex items-center justify-center gap-2 ";
+                        if (isGoogle) {
+                            buttonClass += "bg-white text-gray-900 hover:bg-gray-100";
+                        } else if (isApple) {
+                            buttonClass += "bg-black text-white border border-gray-700 hover:bg-gray-900";
+                        } else {
+                            buttonClass += "bg-gray-800 text-white hover:bg-gray-700";
+                        }
+                        return (
+                            <button
+                                key={p.name}
+                                type="button"
+                                onClick={() => authWithOAuth2(p.name, `/event/${event.id}`)}
+                                className={buttonClass}
+                            >
+                                {isGoogle && (
+                                    <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                                    </svg>
+                                )}
+                                {isApple && (
+                                    <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="currentColor" d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.74 1.18 0 2.21-1.64 3.57-1.14 3.16.89 5.37 8.35 2.15 13.37zM12.93 2.56C13.68 1.49 15.68.61 16.92 1c.14 1.83-1.66 3.79-3.4 3.91-.95.03-3.23-1.07-2.3-2.35z" /></svg>
+                                )}
+                                {!isGoogle && !isApple && (
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
+                                )}
+                                Continue with {p.name.charAt(0).toUpperCase() + p.name.slice(1)}
+                            </button>
+                        );
+                    })}
+                </div>
                 <button
                     onClick={() => router.push('/')}
-                    className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg"
+                    className="text-gray-500 hover:text-gray-300 text-sm"
                 >
-                    Sign In to Access
+                    Back to Home
                 </button>
             </div>
         );
@@ -390,8 +444,9 @@ export default function EventPage({ id: propId }: { id?: string }) {
     if (error) return <div className="flex h-screen items-center justify-center text-red-500">{error}</div>;
     if (!event) return <div className="flex h-screen items-center justify-center text-red-500">Event not found</div>;
 
-    const user = getUser();
+    const user = currentUser;
     const isHost = event?.owner && user?.id === event.owner;
+    const shareUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/event/${event.id}`;
 
     return (
         <div className="min-h-screen bg-gray-950 pb-20">
@@ -480,7 +535,8 @@ export default function EventPage({ id: propId }: { id?: string }) {
                         <PhotoCard
                             key={photo.id}
                             photo={photo}
-                            currentUserId={getUser()?.id}
+                            currentUserId={currentUser?.id}
+                            currentUserAvatar={currentUser ? getAvatarUrl(currentUser) : undefined}
                             eventOwnerId={event?.owner} // Assuming event owner is not expanded, just the ID
                             onPhotoClick={() => setSelectedPhotoIndex(photos.indexOf(photo))}
                         />
@@ -638,7 +694,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
                             {editVisibility === 'unlisted' && (
                                 <button
                                     onClick={() => {
-                                        navigator.clipboard.writeText(window.location.href);
+                                        navigator.clipboard.writeText(shareUrl);
                                         enqueueSnackbar("Link copied to clipboard", { variant: 'success' });
                                     }}
                                     className="w-full mt-4 bg-gray-800 hover:bg-gray-700 text-white text-sm py-2 px-4 rounded border border-gray-700 transition flex items-center justify-center gap-2"
@@ -710,7 +766,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
 
                             <div className="bg-white p-2 rounded-lg shadow-sm border border-gray-100">
                                 <QRCode
-                                    value={window.location.href}
+                                    value={shareUrl}
                                     size={200}
                                     style={{ height: "auto", maxWidth: "100%", width: "100%" }}
                                     viewBox={`0 0 256 256`}
@@ -723,12 +779,12 @@ export default function EventPage({ id: propId }: { id?: string }) {
                                     <input
                                         type="text"
                                         readOnly
-                                        value={window.location.href}
+                                        value={shareUrl}
                                         className="w-full bg-gray-100 text-gray-600 text-sm p-3 rounded-lg border border-gray-200 focus:outline-none"
                                     />
                                     <button
                                         onClick={() => {
-                                            navigator.clipboard.writeText(window.location.href);
+                                            navigator.clipboard.writeText(shareUrl);
                                             enqueueSnackbar("Link copied!", { variant: 'success' });
                                         }}
                                         className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg flex items-center justify-center flex-shrink-0 transition"
@@ -823,7 +879,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
                                 <h3 className="text-xl font-medium mb-1 line-clamp-2">{photos[selectedPhotoIndex].caption}</h3>
                                 <div className="flex justify-between items-end">
                                     <p className="text-sm text-gray-300">
-                                        Uploaded by <span className="text-white font-medium">{photos[selectedPhotoIndex].expand?.owner?.name || photos[selectedPhotoIndex].expand?.owner?.email || 'Guest'}</span>
+                                        Uploaded by <span className="text-white font-medium">{photos[selectedPhotoIndex].owner_name || 'Guest'}</span>
                                     </p>
                                     <p className="text-xs text-gray-500">
                                         {new Date(photos[selectedPhotoIndex].created).toLocaleTimeString()} · {new Date(photos[selectedPhotoIndex].created).toLocaleDateString()}

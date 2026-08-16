@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
-    getEvent, isAuthenticated, getUser, login, logout, onAuthChange, 
+    getEvent, isAuthenticated, getCurrentUser, logout, 
     listAuthMethods, authWithOAuth2, createGuestUser, listEvents 
 } from '@/lib/db';
 
@@ -20,21 +20,19 @@ export default function JoinPage({ code: propCode }: { code?: string }) {
     const [authError, setAuthError] = useState('');
     const authenticating = useRef(false);
 
-const checkExistingAuth = async () => {
-        if (isAuthenticated()) {
-            try {
-                console.log("Verifying existing session...");
-                const user = getUser();
-                if (!user) {
-                    throw new Error("Token valid but user model missing");
-                }
+    const checkExistingAuth = async () => {
+        try {
+            console.log("Verifying existing session...");
+            const user = await getCurrentUser();
+            if (user) {
                 console.log("Existing session valid. User:", user.id);
                 setAuthStatus('success');
-            } catch (err) {
-                console.warn("Existing session invalid or expired.", err);
-                logout();
+            } else {
                 setAuthStatus('idle');
             }
+        } catch (err) {
+            console.warn("Existing session check failed:", err);
+            setAuthStatus('idle');
         }
     };
 
@@ -92,6 +90,11 @@ const checkExistingAuth = async () => {
     useEffect(() => {
         if (authStatus === 'success' && event && event.join_mode !== 'pin') {
             console.log("Already authenticated, redirecting to event...");
+            const joinedEvents = JSON.parse(localStorage.getItem('joined_events') || '[]');
+            if (!joinedEvents.includes(event.id)) {
+                joinedEvents.push(event.id);
+                localStorage.setItem('joined_events', JSON.stringify(joinedEvents));
+            }
             router.push(`/event/${event.id}`);
         }
     }, [authStatus, event, router]);
@@ -169,19 +172,13 @@ const checkExistingAuth = async () => {
     const handleOAuthLogin = async (providerName: string) => {
         setLoading(true);
         try {
-            await authWithOAuth2(providerName);
-            
-            // Auth successful, now join
+            // Pass the event URL as the post-login redirect so the OAuth
+            // callback returns the user straight to the album.
             if (event) {
-                if (event.join_mode !== 'pin') {
-                    const joinedEvents = JSON.parse(localStorage.getItem('joined_events') || '[]');
-                    if (!joinedEvents.includes(event.id)) {
-                        joinedEvents.push(event.id);
-                        localStorage.setItem('joined_events', JSON.stringify(joinedEvents));
-                    }
-                    router.push(`/event/${event.id}`);
-                }
+                await authWithOAuth2(providerName, `/event/${event.id}`);
+                return;
             }
+            await authWithOAuth2(providerName);
         } catch (err) {
             console.error("OAuth failed", err);
         } finally {
@@ -293,11 +290,15 @@ const checkExistingAuth = async () => {
                         if (authStatus === 'success') {
                             handleJoin();
                         } else {
-                            const success = await createGuestSession();
-                            if (success) {
-                                // Small delay to ensure state update propagates if needed, 
-                                // though we just awaited it. handleJoin checks authStore.
+                            const existingUser = await getCurrentUser();
+                            if (existingUser) {
+                                setAuthStatus('success');
                                 handleJoin();
+                            } else {
+                                const success = await createGuestSession();
+                                if (success) {
+                                    handleJoin();
+                                }
                             }
                         }
                     }}

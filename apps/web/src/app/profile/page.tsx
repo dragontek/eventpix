@@ -107,6 +107,7 @@ export default function ProfilePage() {
     if (loading) return <div className="min-h-screen bg-gray-950 flex items-center justify-center text-white">Loading...</div>;
 
     const isGuest = user?.email?.startsWith('guest_');
+    const avatarUrl = user ? getAvatarUrl(user) : null;
 
     return (
         <div className="min-h-screen bg-gray-950 text-white pb-20">
@@ -125,7 +126,7 @@ export default function ProfilePage() {
                 {/* Avatar Section */}
                 <div className="flex flex-col items-center gap-4">
                     <div className="relative group">
-                        <div className={`w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold shadow-2xl border-4 border-gray-900 overflow-hidden ${(previewUrl || user?.avatar) ? 'bg-gray-900' : 'bg-gradient-to-br from-blue-500 to-purple-600'
+                        <div className={`w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold shadow-2xl border-4 border-gray-900 overflow-hidden ${(previewUrl || avatarUrl) ? 'bg-gray-900' : 'bg-gradient-to-br from-blue-500 to-purple-600'
                             }`}>
                             {previewUrl ? (
                                 <img
@@ -133,9 +134,9 @@ export default function ProfilePage() {
                                     alt="Preview"
                                     className="w-full h-full object-cover"
                                 />
-                            ) : user?.avatar ? (
+                            ) : avatarUrl ? (
                                 <img
-                                    src={getAvatarUrl(user)}
+                                    src={avatarUrl}
                                     alt={user.name}
                                     className="w-full h-full object-cover"
                                 />

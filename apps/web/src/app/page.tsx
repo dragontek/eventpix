@@ -6,7 +6,6 @@ import { useSnackbar } from 'notistack';
 import { db, getUser, isAuthenticated, login, register, logout, listEvents, createEvent as dbCreateEvent, onAuthChange, listAuthMethods, authWithOAuth2, createGuestUser } from '@/lib/db';
 
 import UserProfile from '@/components/UserProfile';
-import { InstallPWAButton } from '@/components/InstallPWAButton';
 
 export default function Home() {
   const router = useRouter();
@@ -341,7 +340,6 @@ export default function Home() {
       <div className="flex min-h-screen flex-col items-center justify-center p-4">
         {/* Top Right Toggle */}
         <div className="absolute top-4 right-4 flex gap-4 items-center z-50">
-          <InstallPWAButton />
           {currentUser ? (
             <UserProfile />
           ) : (

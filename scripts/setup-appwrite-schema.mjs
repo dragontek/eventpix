@@ -51,6 +51,8 @@ const COLLECTIONS = {
             { key: 'likes', type: 'string', size: 64, array: true, required: false },
             { key: 'session_tag', type: 'string', size: 64, required: false },
             { key: 'phash', type: 'string', size: 64, required: false },
+            { key: 'owner_name', type: 'string', size: 255, required: false },
+            { key: 'owner_avatar', type: 'string', size: 2048, required: false },
         ],
         indexes: [
             { key: 'photos_event', type: 'key', attributes: ['event'] },
