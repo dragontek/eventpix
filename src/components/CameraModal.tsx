@@ -14,9 +14,21 @@ export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalP
     const [error, setError] = useState<string | null>(null);
     const [capturing, setCapturing] = useState(false);
 
-    // Default to rear ('environment') camera for event photos
-    const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
+    // Default to rear ('environment') on mobile, and front ('user') on desktop
+    const [facingMode, setFacingMode] = useState<'user' | 'environment'>(() => {
+        if (typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+            return 'environment';
+        }
+        return 'user';
+    });
     const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
+
+    // Keep video element srcObject synchronized whenever stream or videoRef updates
+    useEffect(() => {
+        if (videoRef.current && stream) {
+            videoRef.current.srcObject = stream;
+        }
+    }, [stream, isOpen]);
 
     useEffect(() => {
         if (!isOpen) {
@@ -40,21 +52,25 @@ export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalP
                 throw new Error("Camera API is not supported on this browser.");
             }
 
-            const mediaStream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: { ideal: mode },
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 },
-                },
-                audio: false,
-            });
-
-            setStream(mediaStream);
-            if (videoRef.current) {
-                videoRef.current.srcObject = mediaStream;
+            let mediaStream: MediaStream;
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: mode,
+                    },
+                    audio: false,
+                });
+            } catch {
+                // Fallback for desktop/laptop webcams that reject facingMode constraints
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: false,
+                });
             }
 
-            // Enumerate devices AFTER permissions are granted so device IDs and counts are populated accurately
+            setStream(mediaStream);
+
+            // Enumerate devices AFTER permissions are granted
             if (navigator.mediaDevices.enumerateDevices) {
                 try {
                     const devices = await navigator.mediaDevices.enumerateDevices();
@@ -62,30 +78,11 @@ export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalP
                     const isMobileDevice = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
                     setHasMultipleCameras(videoDevices.length > 1 || isMobileDevice);
                 } catch {
-                    setHasMultipleCameras(true); // Fallback: assume flip option on mobile
+                    setHasMultipleCameras(false);
                 }
             }
         } catch (err: any) {
             console.error("Camera access error:", err);
-
-            // Fallback: If 'environment' exact/ideal constraint failed on certain devices, retry without facingMode constraint
-            if (mode === 'environment') {
-                try {
-                    const fallbackStream = await navigator.mediaDevices.getUserMedia({
-                        video: true,
-                        audio: false,
-                    });
-                    setStream(fallbackStream);
-                    if (videoRef.current) {
-                        videoRef.current.srcObject = fallbackStream;
-                    }
-                    setHasMultipleCameras(true);
-                    return;
-                } catch (fallbackErr: any) {
-                    console.error("Fallback camera error:", fallbackErr);
-                }
-            }
-
             setError(err.message || "Could not access camera. Please check browser permissions.");
         }
     };
