@@ -13,7 +13,9 @@ export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalP
     const [stream, setStream] = useState<MediaStream | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [capturing, setCapturing] = useState(false);
-    const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+
+    // Default to rear ('environment') camera for event photos
+    const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
     const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
 
     useEffect(() => {
@@ -23,14 +25,6 @@ export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalP
         }
 
         startCamera(facingMode);
-
-        // Check if multiple camera devices exist
-        if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-            navigator.mediaDevices.enumerateDevices().then((devices) => {
-                const videoDevices = devices.filter((d) => d.kind === 'videoinput');
-                setHasMultipleCameras(videoDevices.length > 1);
-            }).catch(() => {});
-        }
 
         return () => {
             stopStream();
@@ -48,7 +42,7 @@ export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalP
 
             const mediaStream = await navigator.mediaDevices.getUserMedia({
                 video: {
-                    facingMode: mode,
+                    facingMode: { ideal: mode },
                     width: { ideal: 1920 },
                     height: { ideal: 1080 },
                 },
@@ -59,8 +53,39 @@ export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalP
             if (videoRef.current) {
                 videoRef.current.srcObject = mediaStream;
             }
+
+            // Enumerate devices AFTER permissions are granted so device IDs and counts are populated accurately
+            if (navigator.mediaDevices.enumerateDevices) {
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const videoDevices = devices.filter((d) => d.kind === 'videoinput');
+                    const isMobileDevice = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+                    setHasMultipleCameras(videoDevices.length > 1 || isMobileDevice);
+                } catch {
+                    setHasMultipleCameras(true); // Fallback: assume flip option on mobile
+                }
+            }
         } catch (err: any) {
             console.error("Camera access error:", err);
+
+            // Fallback: If 'environment' exact/ideal constraint failed on certain devices, retry without facingMode constraint
+            if (mode === 'environment') {
+                try {
+                    const fallbackStream = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: false,
+                    });
+                    setStream(fallbackStream);
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = fallbackStream;
+                    }
+                    setHasMultipleCameras(true);
+                    return;
+                } catch (fallbackErr: any) {
+                    console.error("Fallback camera error:", fallbackErr);
+                }
+            }
+
             setError(err.message || "Could not access camera. Please check browser permissions.");
         }
     };
@@ -127,7 +152,9 @@ export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalP
                 <div className="flex items-center justify-between p-4 border-b border-gray-800">
                     <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
-                        <h3 className="text-sm font-bold text-white uppercase tracking-wider">Camera Preview</h3>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                            Camera Preview ({facingMode === 'environment' ? 'Rear' : 'Front'})
+                        </h3>
                     </div>
 
                     <button
@@ -175,12 +202,13 @@ export default function CameraModal({ isOpen, onClose, onCapture }: CameraModalP
                         {hasMultipleCameras && !error && (
                             <button
                                 onClick={toggleCamera}
-                                className="p-3 bg-gray-800 hover:bg-gray-700 text-white rounded-full transition border border-gray-700 active:scale-95"
+                                className="p-3 bg-gray-800 hover:bg-gray-700 text-white rounded-full transition border border-gray-700 active:scale-95 flex items-center gap-2"
                                 title="Flip Camera"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                 </svg>
+                                <span className="text-xs hidden sm:inline">Flip</span>
                             </button>
                         )}
                     </div>
