@@ -1,7 +1,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSnackbar } from 'notistack';
-import { getPhotoUrl, deletePhoto, updatePhotoStatus, updatePhoto } from '@/lib/db';
+import { getPhotoThumbUrl, deletePhoto, updatePhotoStatus, updatePhoto } from '@/lib/db';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -13,9 +13,9 @@ interface PhotoCardProps {
     eventOwnerId?: string;
 }
 
-export default function PhotoCard({ photo, currentUserId, eventOwnerId, onPhotoClick }: PhotoCardProps & { onPhotoClick?: () => void }) {
+export default function PhotoCard({ photo, currentUserId, eventOwnerId, animationDelay = 0, onPhotoClick }: PhotoCardProps & { animationDelay?: number; onPhotoClick?: () => void }) {
     const { enqueueSnackbar } = useSnackbar();
-    const url = getPhotoUrl(photo);
+    const url = getPhotoThumbUrl(photo);
     const isOwner = currentUserId && currentUserId === photo.owner;
     const ownerName = isOwner ? 'You' : (photo.expand?.owner?.name || photo.expand?.owner?.email || 'Guest');
 
@@ -34,9 +34,9 @@ export default function PhotoCard({ photo, currentUserId, eventOwnerId, onPhotoC
     useEffect(() => {
         const timer = setTimeout(() => {
             setAnimationClass("");
-        }, 1000);
+        }, 1000 + animationDelay);
         return () => clearTimeout(timer);
-    }, []);
+    }, [animationDelay]);
 
     // Flash Highlight Logic
     useEffect(() => {
@@ -133,7 +133,7 @@ export default function PhotoCard({ photo, currentUserId, eventOwnerId, onPhotoC
     const finalClass = `mb-4 break-inside-avoid rounded-lg overflow-hidden shadow-lg bg-gray-800 relative group transition-all border border-transparent ${animationClass} ${highlight ? 'animate-flash' : ''} ${photo._isExiting ? 'animate-fade-out' : ''}`;
 
     return (
-        <div className={finalClass}>
+        <div className={finalClass} style={animationDelay ? { animationDelay: `${animationDelay}ms` } : undefined}>
             <div
                 className="relative w-full cursor-pointer"
                 onClick={() => {
