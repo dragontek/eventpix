@@ -10,6 +10,7 @@ import {
 } from '@/lib/db';
 import PhotoCard from '@/components/PhotoCard';
 import UserProfile from '@/components/UserProfile';
+import CameraModal from '@/components/CameraModal';
 import QRCode from "react-qr-code";
 
 // Helper for datetime-local input
@@ -31,6 +32,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
     const [error, setError] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const cameraInputRef = useRef<HTMLInputElement>(null);
+    const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [authProviders, setAuthProviders] = useState<any[]>([]);
 
@@ -138,7 +140,11 @@ export default function EventPage({ id: propId }: { id?: string }) {
     };
 
     const handleCameraClick = () => {
-        cameraInputRef.current?.click();
+        if (typeof navigator !== 'undefined' && navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+            setIsCameraModalOpen(true);
+        } else {
+            cameraInputRef.current?.click();
+        }
     };
 
     const uploadFiles = async (files: File[]) => {
@@ -883,6 +889,15 @@ export default function EventPage({ id: propId }: { id?: string }) {
                     </div>
                 </div>
             )}
+
+            {/* Camera Modal for Webcams / Desktop */}
+            <CameraModal
+                isOpen={isCameraModalOpen}
+                onClose={() => setIsCameraModalOpen(false)}
+                onCapture={async (file) => {
+                    await uploadFiles([file]);
+                }}
+            />
         </div>
     );
 }
