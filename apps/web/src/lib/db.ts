@@ -1,7 +1,6 @@
 import {
     db as _db,
     getDbProvider,
-    createDbProvider,
     type DataProvider,
     type DbConfig,
     type User,

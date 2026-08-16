@@ -23,15 +23,11 @@ export default function PhotoCard({ photo, currentUserId, currentUserAvatar, eve
     const ownerAvatar = photo.owner_avatar || (isOwner ? currentUserAvatar : '');
 
     const [isEditing, setIsEditing] = useState(false);
-    const [caption, setCaption] = useState(photo.caption || ''); // Renamed from editCaption
+    const [caption, setCaption] = useState(photo.caption || '');
 
-    // Likes logic - Initializing state
-    const initialLikes = Array.isArray(photo.likes) ? photo.likes : (typeof photo.likes === 'string' && photo.likes.trim() !== '' ? [photo.likes] : []);
-    const [liked, setLiked] = useState(currentUserId ? initialLikes.includes(currentUserId) : false);
-    const [likesCount, setLikesCount] = useState(initialLikes.length);
     // Manage animation classes
     const [animationClass, setAnimationClass] = useState("animate-fade-in");
-    const [highlight, setHighlight] = useState(false); // Keep highlight state for flash effect
+    const [highlight, setHighlight] = useState(false);
 
     // Remove fade-in after it completes so it doesn't conflict with flash or restart
     useEffect(() => {
@@ -43,31 +39,18 @@ export default function PhotoCard({ photo, currentUserId, currentUserAvatar, eve
 
     // Flash Highlight Logic
     useEffect(() => {
-        // Only flash if the photo has been updated or likes/caption changed after initial mount
-        // We can use a ref or a separate state to track if it's the first render.
-        // For simplicity, let's assume `photo.updated` changes for updates.
-        // If `photo.updated` is the same as `photo.created`, it's likely the initial load.
         if (photo.updated && photo.updated !== photo.created) {
-            setHighlight(true);
-            const timer = setTimeout(() => setHighlight(false), 1000);
-            return () => clearTimeout(timer);
+            const timer1 = setTimeout(() => setHighlight(true), 0);
+            const timer2 = setTimeout(() => setHighlight(false), 1000);
+            return () => {
+                clearTimeout(timer1);
+                clearTimeout(timer2);
+            };
         }
-    }, [photo.updated, photo.likes, photo.caption]);
+    }, [photo.updated, photo.created, photo.likes, photo.caption]);
 
-    // Handle Exit (if passed from parent, or we can assume if this component is about to unmount... 
-    // actually standard React unmount happens instantly. We need the parent to delay unmount.)
-    // For now, let's look for an `isExiting` prop or similar on the photo object if we were to add it.
-    // But first, let's fix the re-fade-in issue which is the main annoyance.
-
-    // Check permissions
-    // Owner can Delete & Edit. Host can Delete.
-    // const isOwner = currentUserId && currentUserId === photo.owner; // Now passed as prop
-    // const isHost = currentUserId && currentUserId === eventOwnerId; // Removed
-    const canDelete = isOwner; // Simplified, assuming host logic is handled upstream
+    const canDelete = isOwner;
     const canEdit = isOwner;
-
-    // Debug permissions
-    // console.log(`Photo ${ photo.id }: `, { isOwner, isHost, currentUserId, photoOwner: photo.owner, eventOwner: eventOwnerId });
 
     const [isDeleting, setIsDeleting] = useState(false);
 
@@ -86,7 +69,7 @@ export default function PhotoCard({ photo, currentUserId, currentUserAvatar, eve
         }
     };
 
-    const handleUpdateCaption = async () => { // Renamed from handleSaveCaption
+    const handleUpdateCaption = async () => {
         try {
             await updatePhoto(photo.id, { caption: caption });
             setIsEditing(false);
@@ -96,11 +79,7 @@ export default function PhotoCard({ photo, currentUserId, currentUserAvatar, eve
         }
     };
 
-    // Likes logic
-    // PB can return a single string ID if only one relation exists, or array if multiple
-    // Likes logic
-    // PB can return: null, undefined, single string ID, or array of strings.
-    // We must normalize to string[] to be safe.
+    // Likes logic - normalize to string[]
     const rawLikes = photo.likes;
     let likes: string[] = [];
 
@@ -110,7 +89,6 @@ export default function PhotoCard({ photo, currentUserId, currentUserAvatar, eve
         likes = [rawLikes];
     }
 
-    // Ensure uniqueness just in case
     likes = [...new Set(likes)];
 
     const isLiked = currentUserId ? likes.includes(currentUserId) : false;

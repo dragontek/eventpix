@@ -182,15 +182,7 @@ export default function Home() {
     };
 
     fetchHistory();
-  }, [currentUser]); // Re-run if user logs in/out
-
-  // ... (fetchMyEvents and handlers remain the same) ...
-  // But wait, I need to include them in the replace call if I am replacing the top part of the file.
-  // The Instruction says: "Add UserProfile to header...".
-  // I will use `replace_file_content` to swap the imports and the top part of the component logic.
-  // Then another call to swap the JSX header.
-
-  // Let's do imports first + component start.
+  }, [currentUser]);
 
 
   const fetchMyEvents = async () => {

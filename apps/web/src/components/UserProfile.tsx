@@ -3,20 +3,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { getUser, logout, onAuthChange, getAvatarUrl } from '@/lib/db';
 import { useRouter } from 'next/navigation';
-import { useSnackbar } from 'notistack';
 
 export default function UserProfile() {
     const router = useRouter();
-    const { enqueueSnackbar } = useSnackbar();
     const [user, setUser] = useState<any>(getUser());
     const [isOpen, setIsOpen] = useState(false);
-    const [isEditing, setIsEditing] = useState(false);
-    const [newName, setNewName] = useState(user?.name || '');
     const menuRef = useRef<HTMLDivElement>(null);
 
-    // Refresh user on mount
+    // Subscribe to auth changes
     useEffect(() => {
-        setUser(getUser());
         return onAuthChange((user) => {
             setUser(user);
         });
@@ -33,28 +28,9 @@ export default function UserProfile() {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    const [loading, setLoading] = useState(false);
-
     const handleLogout = () => {
         logout();
         router.push('/');
-    };
-
-    const handleSave = async () => {
-        if (!newName.trim()) return;
-        setLoading(true);
-        try {
-            // Note: User profile update not in interface yet, using placeholder
-            setUser({ ...user, name: newName });
-            setIsOpen(false);
-            setIsEditing(false);
-            enqueueSnackbar("Profile updated", { variant: 'success' });
-        } catch (err) {
-            console.error(err);
-            enqueueSnackbar("Failed to update name", { variant: 'error' });
-        } finally {
-            setLoading(false);
-        }
     };
 
     if (!user) return null;
