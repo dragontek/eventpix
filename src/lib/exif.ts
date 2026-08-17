@@ -2,14 +2,26 @@ import exifr from 'exifr';
 
 /**
  * Extract photo creation timestamp from image EXIF metadata
- * Fallback to file.lastModified or current timestamp if EXIF is missing
+ * Supports File, Blob, or Image URL strings (e.g. Appwrite bucket file URL)
  */
-export async function getPhotoTakenDate(file: File): Promise<Date> {
+export async function getPhotoTakenDate(input: File | Blob | string): Promise<Date | null> {
     try {
-        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500));
-        const parsePromise = exifr.parse(file, ['DateTimeOriginal', 'CreateDate', 'ModifyDate']);
+        let bufferOrFile: ArrayBuffer | Blob | File = input as any;
+
+        // If input is a URL string, fetch ArrayBuffer first to avoid CORS chunked range issues
+        if (typeof input === 'string') {
+            const response = await fetch(input);
+            if (!response.ok) {
+                return null;
+            }
+            bufferOrFile = await response.arrayBuffer();
+        }
+
+        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
+        const parsePromise = exifr.parse(bufferOrFile, true);
 
         const exifData = await Promise.race([parsePromise, timeoutPromise]);
+
         if (exifData) {
             const takenDate = (exifData as any).DateTimeOriginal || (exifData as any).CreateDate || (exifData as any).ModifyDate;
             if (takenDate instanceof Date && !isNaN(takenDate.getTime())) {
@@ -26,10 +38,9 @@ export async function getPhotoTakenDate(file: File): Promise<Date> {
         console.warn("Could not extract EXIF timestamp:", err);
     }
 
-    // Fallback to file system lastModified date if sensible
-    if (file.lastModified && file.lastModified > 0) {
-        return new Date(file.lastModified);
+    if (typeof input !== 'string' && (input as File).lastModified && (input as File).lastModified > 0) {
+        return new Date((input as File).lastModified);
     }
 
-    return new Date();
+    return null;
 }

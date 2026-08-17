@@ -152,7 +152,7 @@ export class AppwriteProvider implements DataProvider {
             phash: data.phash,
             owner_name: data.owner_name,
             owner_avatar: data.owner_avatar,
-            taken_at: data.taken_at || doc.$createdAt,
+            taken_at: data.taken_at || undefined,
             created: doc.$createdAt,
             updated: doc.$updatedAt,
             expand: data.expand,
@@ -449,7 +449,9 @@ export class AppwriteProvider implements DataProvider {
         let takenDateISO = new Date().toISOString();
         try {
             const takenDate = await getPhotoTakenDate(file);
-            takenDateISO = takenDate.toISOString();
+            if (takenDate) {
+                takenDateISO = takenDate.toISOString();
+            }
         } catch (e) {
             console.warn("Error getting photo taken date:", e);
         }

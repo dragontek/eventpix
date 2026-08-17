@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { listApprovedPhotos, getPhotoUrl, subscribeToPhotos } from '@/lib/db';
 import QRCode from 'react-qr-code';
 import Image from 'next/image';
-
+import { getPhotoTakenDate } from '@/lib/exif';
 
 export default function SlideshowPage({ id: propId }: { id?: string }) {
     const params = useParams();
@@ -61,6 +61,29 @@ export default function SlideshowPage({ id: propId }: { id?: string }) {
         return () => clearInterval(interval);
     }, [isPlaying, photos.length, currentIndex]);
 
+    // Extract EXIF date for active slideshow photo if taken_at is missing
+    useEffect(() => {
+        const photo = photos[currentIndex];
+        if (!photo || photo.taken_at) return;
+
+        let isMounted = true;
+        const photoUrl = getPhotoUrl(photo);
+        if (photoUrl) {
+            getPhotoTakenDate(photoUrl).then((exifDate) => {
+                if (isMounted && exifDate) {
+                    const iso = exifDate.toISOString();
+                    setPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, taken_at: iso } : p));
+                }
+            }).catch((err) => {
+                console.warn("Slideshow EXIF extraction error:", err);
+            });
+        }
+
+        return () => {
+            isMounted = false;
+        };
+    }, [currentIndex, photos]);
+
     // Keyboard navigation
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -82,7 +105,6 @@ export default function SlideshowPage({ id: propId }: { id?: string }) {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [photos.length, router, currentIndex]);
 
-
     if (loading) return <div className="flex h-screen items-center justify-center bg-black text-white">Loading...</div>;
     if (photos.length === 0) return <div className="flex h-screen items-center justify-center bg-black text-white">No photos yet.</div>;
 
@@ -92,19 +114,17 @@ export default function SlideshowPage({ id: propId }: { id?: string }) {
 
     // Safety check if index is out of bounds or photo missing
     if (!currentPhoto || !currentPhoto.file) {
-        // If we have photos but index is bad, reset to 0
         if (photos.length > 0 && currentIndex >= photos.length) {
             setCurrentIndex(0);
         }
         return <div className="flex h-screen items-center justify-center bg-black text-white">Loading...</div>;
     }
 
+    const displayDate = currentPhoto.taken_at || currentPhoto.created;
+
     return (
         <div className="relative h-screen w-full bg-black overflow-hidden">
-            {/* Background Image (Previous) - only if we have switched at least once or prev exists */}
-            {/* Logic: prevPhoto exists. If prevIndex != currentIndex, we show prev in background. */}
-
-            {/* We want exact crossfade. So Prev should look identical to Current. */}
+            {/* Background Image (Previous) */}
             {prevPhoto && prevPhoto.file && (
                 <div className="absolute inset-0 flex items-center justify-center z-0">
                     <img
@@ -119,7 +139,7 @@ export default function SlideshowPage({ id: propId }: { id?: string }) {
             <div className="absolute inset-0 flex items-center justify-center z-10">
                 <div className="relative w-full h-full flex items-center justify-center">
                     <img
-                        key={currentPhoto.id} // Key forces remount and triggers animation
+                        key={currentPhoto.id}
                         src={getPhotoUrl(currentPhoto)}
                         alt={currentPhoto.caption || "Event Photo"}
                         className="w-full h-full object-contain animate-fade-in"
@@ -128,15 +148,15 @@ export default function SlideshowPage({ id: propId }: { id?: string }) {
             </div>
 
             {/* Overlay Info */}
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-8 text-white">
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-8 text-white z-20">
                 <p className="text-xl font-medium line-clamp-2">{currentPhoto.caption}</p>
-                <p className="text-sm text-white/60 mt-1">
-                    Uploaded by {currentPhoto.expand?.owner?.email || 'Guest'} • {new Date(currentPhoto.taken_at || currentPhoto.created).toLocaleTimeString()}
+                <p className="text-sm text-white/70 mt-1">
+                    Uploaded by {currentPhoto.owner_name || currentPhoto.expand?.owner?.email || 'Guest'} • {new Date(displayDate).toLocaleTimeString()} · {new Date(displayDate).toLocaleDateString()}
                 </p>
             </div>
 
             {/* Controls */}
-            <div className="absolute top-4 right-4 flex gap-4 z-10">
+            <div className="absolute top-4 right-4 flex gap-4 z-20">
                 <button
                     onClick={() => setIsPlaying(!isPlaying)}
                     className="p-2 bg-black/50 rounded-full text-white hover:bg-white/20 backdrop-blur-md transition"
@@ -159,14 +179,14 @@ export default function SlideshowPage({ id: propId }: { id?: string }) {
 
             {/* Progress Bar */}
             {isPlaying && (
-                <div className="absolute top-0 left-0 h-1 bg-white/20 w-full">
-                    {/* CSS Animation could go here for the progress bar, but for now just static background */}
+                <div className="absolute top-0 left-0 h-1 bg-white/20 w-full z-20">
+                    <div className="h-full bg-blue-500 animate-[progress_5s_linear_infinite]" key={currentIndex}></div>
                 </div>
             )}
 
             {/* Scan-to-join QR */}
             {albumUrl && (
-                <div className="absolute bottom-4 left-4 z-20 flex flex-col items-center gap-1 bg-black/60 backdrop-blur-sm rounded-2xl p-3 border border-white/10">
+                <div className="absolute bottom-4 left-4 z-30 flex flex-col items-center gap-1 bg-black/60 backdrop-blur-sm rounded-2xl p-3 border border-white/10">
                     <QRCode
                         value={albumUrl}
                         size={120}

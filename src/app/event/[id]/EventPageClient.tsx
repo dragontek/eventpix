@@ -12,6 +12,7 @@ import PhotoCard from '@/components/PhotoCard';
 import UserProfile from '@/components/UserProfile';
 import CameraModal from '@/components/CameraModal';
 import QRCode from "react-qr-code";
+import { getPhotoTakenDate } from '@/lib/exif';
 
 // Helper for datetime-local input
 const toLocalISO = (dateStr?: string) => {
@@ -167,7 +168,18 @@ export default function EventPage({ id: propId }: { id?: string }) {
                 // Auto-approve if owner, otherwise check event settings
                 const status = (event?.approval_required && !isOwner) ? 'pending' : 'approved';
                 
-                await dbCreatePhoto(event.id, file, { status, owner: userId });
+                // Extract creation timestamp from EXIF metadata (or lastModified fallback)
+                let takenAtISO: string | undefined;
+                try {
+                    const takenDate = await getPhotoTakenDate(file);
+                    if (takenDate) {
+                        takenAtISO = takenDate.toISOString();
+                    }
+                } catch (exifErr) {
+                    console.warn("Could not read EXIF date:", exifErr);
+                }
+
+                await dbCreatePhoto(event.id, file, { status, owner: userId, taken_at: takenAtISO });
                 successCount++;
 
             } catch (err) {
@@ -528,6 +540,9 @@ export default function EventPage({ id: propId }: { id?: string }) {
                             currentUserAvatar={currentUser ? getAvatarUrl(currentUser) : undefined}
                             eventOwnerId={event?.owner} // Assuming event owner is not expanded, just the ID
                             onPhotoClick={() => setSelectedPhotoIndex(photos.indexOf(photo))}
+                            onExifExtracted={(takenAt) => {
+                                setPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, taken_at: takenAt } : p));
+                            }}
                         />
                     ))}
                 </div>

@@ -1,9 +1,10 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSnackbar } from 'notistack';
-import { getPhotoThumbUrl, deletePhoto, updatePhotoStatus, updatePhoto } from '@/lib/db';
+import { getPhotoThumbUrl, getPhotoUrl, deletePhoto, updatePhotoStatus, updatePhoto } from '@/lib/db';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import { getPhotoTakenDate } from '@/lib/exif';
 
 dayjs.extend(relativeTime);
 
@@ -13,17 +14,54 @@ interface PhotoCardProps {
     currentUserAvatar?: string;
     eventOwnerId?: string;
     animationDelay?: number;
+    onPhotoClick?: () => void;
+    onExifExtracted?: (takenAt: string) => void;
 }
 
-export default function PhotoCard({ photo, currentUserId, currentUserAvatar, eventOwnerId, animationDelay = 0, onPhotoClick }: PhotoCardProps & { animationDelay?: number; onPhotoClick?: () => void }) {
+export default function PhotoCard({ 
+    photo, 
+    currentUserId, 
+    currentUserAvatar, 
+    eventOwnerId, 
+    animationDelay = 0, 
+    onPhotoClick,
+    onExifExtracted 
+}: PhotoCardProps) {
     const { enqueueSnackbar } = useSnackbar();
     const url = getPhotoThumbUrl(photo);
+    const fullUrl = getPhotoUrl(photo);
     const isOwner = currentUserId && currentUserId === photo.owner;
     const ownerName = isOwner ? 'You' : (photo.owner_name || 'Guest');
     const ownerAvatar = photo.owner_avatar || (isOwner ? currentUserAvatar : '');
 
     const [isEditing, setIsEditing] = useState(false);
     const [caption, setCaption] = useState(photo.caption || '');
+    const [displayDate, setDisplayDate] = useState<string>(photo.taken_at || photo.created);
+
+    // Extract EXIF timestamp directly from the original image file URL when photo card loads into view
+    useEffect(() => {
+        let isMounted = true;
+        if (photo.taken_at) {
+            setDisplayDate(photo.taken_at);
+            return;
+        }
+
+        if (fullUrl) {
+            getPhotoTakenDate(fullUrl).then((exifDate) => {
+                if (isMounted && exifDate) {
+                    const iso = exifDate.toISOString();
+                    setDisplayDate(iso);
+                    onExifExtracted?.(iso);
+                }
+            }).catch(() => {
+                // Silently ignore EXIF parsing errors
+            });
+        }
+
+        return () => {
+            isMounted = false;
+        };
+    }, [photo.id, photo.taken_at, fullUrl]);
 
     // Manage animation classes
     const [animationClass, setAnimationClass] = useState("animate-fade-in");
@@ -231,7 +269,7 @@ export default function PhotoCard({ photo, currentUserId, currentUserAvatar, eve
                                 )}
                                 <span className="truncate">by {ownerName}</span>
                             </span>
-                            <span className="flex-shrink-0">{dayjs(photo.taken_at || photo.created).fromNow()}</span>
+                            <span className="flex-shrink-0">{dayjs(displayDate).fromNow()}</span>
                         </div>
                     </>
                 )}
