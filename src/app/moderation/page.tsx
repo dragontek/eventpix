@@ -97,7 +97,7 @@ export default function ModerationQueuePage() {
                                     <div>
                                         <div className="flex justify-between items-center mb-1">
                                             <p className="text-xs text-amber-400 font-semibold uppercase tracking-wider">Pending</p>
-                                            <p className="text-xs text-gray-500">{new Date(photo.created).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                            <p className="text-xs text-gray-500">{new Date(photo.taken_at || photo.created).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                                         </div>
                                         {photo.caption && <p className="text-sm text-white mb-2 line-clamp-2">{photo.caption}</p>}
                                         <p className="text-xs text-gray-400 truncate">Uploaded by: {photo.owner_name || 'Guest'}</p>

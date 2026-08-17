@@ -879,7 +879,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
                                         Uploaded by <span className="text-white font-medium">{photos[selectedPhotoIndex].owner_name || 'Guest'}</span>
                                     </p>
                                     <p className="text-xs text-gray-500">
-                                        {new Date(photos[selectedPhotoIndex].created).toLocaleTimeString()} · {new Date(photos[selectedPhotoIndex].created).toLocaleDateString()}
+                                        {new Date(photos[selectedPhotoIndex].taken_at || photos[selectedPhotoIndex].created).toLocaleTimeString()} · {new Date(photos[selectedPhotoIndex].taken_at || photos[selectedPhotoIndex].created).toLocaleDateString()}
                                     </p>
                                 </div>
                             </div>

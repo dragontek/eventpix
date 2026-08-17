@@ -131,7 +131,7 @@ export default function SlideshowPage({ id: propId }: { id?: string }) {
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-8 text-white">
                 <p className="text-xl font-medium line-clamp-2">{currentPhoto.caption}</p>
                 <p className="text-sm text-white/60 mt-1">
-                    Uploaded by {currentPhoto.expand?.owner?.email || 'Guest'} • {new Date(currentPhoto.created).toLocaleTimeString()}
+                    Uploaded by {currentPhoto.expand?.owner?.email || 'Guest'} • {new Date(currentPhoto.taken_at || currentPhoto.created).toLocaleTimeString()}
                 </p>
             </div>
 

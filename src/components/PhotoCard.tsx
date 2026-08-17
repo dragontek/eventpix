@@ -231,7 +231,7 @@ export default function PhotoCard({ photo, currentUserId, currentUserAvatar, eve
                                 )}
                                 <span className="truncate">by {ownerName}</span>
                             </span>
-                            <span className="flex-shrink-0">{dayjs(photo.created).fromNow()}</span>
+                            <span className="flex-shrink-0">{dayjs(photo.taken_at || photo.created).fromNow()}</span>
                         </div>
                     </>
                 )}
