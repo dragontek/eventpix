@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { listApprovedPhotos, getPhotoUrl, subscribeToPhotos } from '@/lib/db';
 import QRCode from 'react-qr-code';
 import Image from 'next/image';
-import { getPhotoTakenDate } from '@/lib/exif';
+import { getPhotoTakenDate, sortPhotosDesc } from '@/lib/exif';
 
 export default function SlideshowPage({ id: propId }: { id?: string }) {
     const params = useParams();
@@ -23,7 +23,7 @@ export default function SlideshowPage({ id: propId }: { id?: string }) {
         const loadPhotos = async () => {
             try {
                 const records = await listApprovedPhotos(id);
-                setPhotos(records);
+                setPhotos(sortPhotosDesc(records));
             } catch (err) {
                 console.error("Error loading photos", err);
             } finally {
@@ -38,7 +38,7 @@ export default function SlideshowPage({ id: propId }: { id?: string }) {
             const unsubscribe = subscribeToPhotos((e) => {
                 if (e.record.event === id && e.record.status === 'approved') {
                     if (e.action === 'create') {
-                        setPhotos(prev => [e.record, ...prev]);
+                        setPhotos(prev => sortPhotosDesc([e.record, ...prev]));
                     } else if (e.action === 'delete') {
                         setPhotos(prev => prev.filter(p => p.id !== e.record.id));
                     }
@@ -72,7 +72,7 @@ export default function SlideshowPage({ id: propId }: { id?: string }) {
             getPhotoTakenDate(photoUrl).then((exifDate) => {
                 if (isMounted && exifDate) {
                     const iso = exifDate.toISOString();
-                    setPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, taken_at: iso } : p));
+                    setPhotos(prev => sortPhotosDesc(prev.map(p => p.id === photo.id ? { ...p, taken_at: iso } : p)));
                 }
             }).catch((err) => {
                 console.warn("Slideshow EXIF extraction error:", err);

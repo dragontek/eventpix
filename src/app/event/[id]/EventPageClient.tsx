@@ -12,7 +12,7 @@ import PhotoCard from '@/components/PhotoCard';
 import UserProfile from '@/components/UserProfile';
 import CameraModal from '@/components/CameraModal';
 import QRCode from "react-qr-code";
-import { getPhotoTakenDate } from '@/lib/exif';
+import { getPhotoTakenDate, sortPhotosDesc } from '@/lib/exif';
 
 // Helper for datetime-local input
 const toLocalISO = (dateStr?: string) => {
@@ -276,12 +276,10 @@ export default function EventPage({ id: propId }: { id?: string }) {
                 setEditStartDate(toLocalISO(eventRecord.start_date));
                 setEditEndDate(toLocalISO(eventRecord.end_date));
 
-                // Fetch photos and sort by EXIF taken_at timestamp (newest first)
-                const photoRecords = (await listApprovedPhotos(id)).sort((a, b) =>
-                    new Date(b.taken_at || b.created).getTime() - new Date(a.taken_at || a.created).getTime()
-                );
+                // Fetch photos and sort by capture timestamp (newest first)
+                const photoRecords = await listApprovedPhotos(id);
                 const uniquePhotos = Array.from(new Map(photoRecords.map(p => [p.id, p])).values());
-                setPhotos(uniquePhotos);
+                setPhotos(sortPhotosDesc(uniquePhotos));
 
                 // Update loading state only after everything is ready
                 setLoading(false);
@@ -304,17 +302,17 @@ export default function EventPage({ id: propId }: { id?: string }) {
                         if (e.record.status === 'approved') {
                             setPhotos((prev) => {
                                 if (prev.some(p => p.id === recordId)) return prev;
-                                return [e.record, ...prev];
+                                return sortPhotosDesc([e.record, ...prev]);
                             });
                         }
                     } else if (e.action === 'update') {
                         if (e.record.status === 'approved') {
                             setPhotos((prev) => {
                                 const exists = prev.some(p => p.id === recordId);
-                                if (exists) {
-                                    return prev.map(p => p.id === recordId ? { ...p, ...e.record } : p);
-                                }
-                                return [e.record, ...prev];
+                                const updatedList = exists
+                                    ? prev.map(p => p.id === recordId ? { ...p, ...e.record } : p)
+                                    : [e.record, ...prev];
+                                return sortPhotosDesc(updatedList);
                             });
                         } else {
                             setPhotos((prev) => prev.filter((p) => p.id !== recordId));
@@ -541,7 +539,7 @@ export default function EventPage({ id: propId }: { id?: string }) {
                             eventOwnerId={event?.owner} // Assuming event owner is not expanded, just the ID
                             onPhotoClick={() => setSelectedPhotoIndex(photos.indexOf(photo))}
                             onExifExtracted={(takenAt) => {
-                                setPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, taken_at: takenAt } : p));
+                                setPhotos(prev => sortPhotosDesc(prev.map(p => p.id === photo.id ? { ...p, taken_at: takenAt } : p)));
                             }}
                         />
                     ))}

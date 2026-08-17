@@ -1,6 +1,17 @@
 import exifr from 'exifr';
 
 /**
+ * Sort photos array by capture timestamp (taken_at or created fallback) descending (newest first)
+ */
+export function sortPhotosDesc<T extends { taken_at?: string; created?: string }>(photos: T[]): T[] {
+    return [...photos].sort((a, b) => {
+        const timeA = new Date(a.taken_at || a.created || 0).getTime();
+        const timeB = new Date(b.taken_at || b.created || 0).getTime();
+        return timeB - timeA;
+    });
+}
+
+/**
  * Extract photo creation timestamp from image EXIF metadata
  * Supports File, Blob, or Image URL strings (e.g. Appwrite bucket file URL)
  */

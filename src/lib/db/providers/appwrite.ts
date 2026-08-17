@@ -20,7 +20,7 @@ import type {
     AuthProviderInfo,
 } from '../types';
 
-import { getPhotoTakenDate } from '@/lib/exif';
+import { getPhotoTakenDate, sortPhotosDesc } from '@/lib/exif';
 
 export interface AppwriteConfig {
     endpoint: string;
@@ -407,7 +407,7 @@ export class AppwriteProvider implements DataProvider {
                 Query.orderDesc('$createdAt'),
             ]
         );
-        return response.documents.map(doc => this.mapPhoto(doc));
+        return sortPhotosDesc(response.documents.map(doc => this.mapPhoto(doc)));
     }
 
     async listEventPhotos(eventId: string): Promise<Photo[]> {
@@ -419,7 +419,7 @@ export class AppwriteProvider implements DataProvider {
                 Query.orderDesc('$createdAt'),
             ]
         );
-        return response.documents.map(doc => this.mapPhoto(doc));
+        return sortPhotosDesc(response.documents.map(doc => this.mapPhoto(doc)));
     }
 
     async listApprovedPhotos(eventId: string): Promise<Photo[]> {
@@ -432,7 +432,7 @@ export class AppwriteProvider implements DataProvider {
                 Query.orderDesc('$createdAt'),
             ]
         );
-        return response.documents.map(doc => this.mapPhoto(doc));
+        return sortPhotosDesc(response.documents.map(doc => this.mapPhoto(doc)));
     }
 
     async createPhoto(eventId: string, file: File, data?: Partial<Photo>): Promise<Photo> {
