@@ -568,14 +568,14 @@ export class AppwriteProvider implements DataProvider {
 
         const unsubscribe = this.client.subscribe(channel, (response) => {
             const payload = response.payload as Models.Document;
-            const eventType = response.events[0] || '';
+            const events = response.events || [];
 
             let action: 'create' | 'update' | 'delete' = 'update';
-            if (eventType.includes('.create')) {
+            if (events.some(ev => ev.endsWith('.create') || ev.includes('.create'))) {
                 action = 'create';
-            } else if (eventType.includes('.delete')) {
+            } else if (events.some(ev => ev.endsWith('.delete') || ev.includes('.delete'))) {
                 action = 'delete';
-            } else if (eventType.includes('.update')) {
+            } else if (events.some(ev => ev.endsWith('.update') || ev.includes('.update'))) {
                 action = 'update';
             }
 

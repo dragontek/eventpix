@@ -276,35 +276,37 @@ export default function EventPage({ id: propId }: { id?: string }) {
 
                 // Subscribe to realtime updates
                 const unsubscribe = subscribeToPhotos(async function (e) {
-                    if (e.record.event !== id) return;
+                    const recordId = e.record?.id;
+                    const recordEvent = e.record?.event;
+
+                    // On delete action, remove photo if present locally regardless of payload metadata
+                    if (e.action === 'delete') {
+                        setPhotos((prev) => prev.filter((p) => p.id !== recordId));
+                        return;
+                    }
+
+                    // For create or update, ensure it belongs to current event ID
+                    if (recordEvent && recordEvent !== id) return;
 
                     if (e.action === 'create') {
                         if (e.record.status === 'approved') {
                             setPhotos((prev) => {
-                                if (prev.some(p => p.id === e.record.id)) return prev;
+                                if (prev.some(p => p.id === recordId)) return prev;
                                 return [e.record, ...prev];
                             });
                         }
                     } else if (e.action === 'update') {
                         if (e.record.status === 'approved') {
                             setPhotos((prev) => {
-                                const exists = prev.some(p => p.id === e.record.id);
+                                const exists = prev.some(p => p.id === recordId);
                                 if (exists) {
-                                    return prev.map(p => p.id === e.record.id ? { ...p, ...e.record } : p);
+                                    return prev.map(p => p.id === recordId ? { ...p, ...e.record } : p);
                                 }
                                 return [e.record, ...prev];
                             });
                         } else {
-                            setPhotos((prev) => prev.map(p => p.id === e.record.id ? { ...p, _isExiting: true } : p));
-                            setTimeout(() => {
-                                setPhotos((prev) => prev.filter((p) => p.id !== e.record.id));
-                            }, 500);
+                            setPhotos((prev) => prev.filter((p) => p.id !== recordId));
                         }
-                    } else if (e.action === 'delete') {
-                        setPhotos((prev) => prev.map(p => p.id === e.record.id ? { ...p, _isExiting: true } : p));
-                        setTimeout(() => {
-                            setPhotos((prev) => prev.filter((p) => p.id !== e.record.id));
-                        }, 500);
                     }
                 });
 
