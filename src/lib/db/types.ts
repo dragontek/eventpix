@@ -65,9 +65,9 @@ export type Membership = {
     created: string;
 };
 
-export type RealtimeEvent = {
+export type RealtimeEvent<T = Record<string, any>> = {
     action: 'create' | 'update' | 'delete';
-    record: any;
+    record: T;
 };
 
 export type DashboardStats = {
@@ -126,7 +126,7 @@ export interface DataProvider {
     deleteInvitation(id: string): Promise<void>;
 
     // Realtime
-    subscribeToPhotos(callback: (e: RealtimeEvent) => void): () => void;
+    subscribeToPhotos(callback: (e: RealtimeEvent<Photo>) => void): () => void;
     subscribe(collection: string, callback: (e: RealtimeEvent) => void): () => void;
 
     // Stats

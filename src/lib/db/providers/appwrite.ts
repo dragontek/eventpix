@@ -557,17 +557,20 @@ export class AppwriteProvider implements DataProvider {
         );
     }
 
-    subscribeToPhotos(callback: (e: RealtimeEvent) => void): () => void {
+    subscribeToPhotos(callback: (e: RealtimeEvent<Photo>) => void): () => void {
         return this.subscribe(this.config.photosCollectionId, (e) => {
-            callback({ ...e, record: this.mapPhoto(e.record as Models.Document) });
+            callback({
+                action: e.action,
+                record: this.mapPhoto(e.record),
+            });
         });
     }
 
-    subscribe(collection: string, callback: (e: RealtimeEvent) => void): () => void {
+    subscribe(collection: string, callback: (e: RealtimeEvent<Models.Document>) => void): () => void {
         const channel = `databases.${this.config.databaseId}.collections.${collection}.documents`;
 
-        const unsubscribe = this.client.subscribe(channel, (response) => {
-            const payload = response.payload as Models.Document;
+        const unsubscribe = this.client.subscribe(channel, (response: { events: string[]; payload: Models.Document }) => {
+            const payload = response.payload;
             const events = response.events || [];
 
             let action: 'create' | 'update' | 'delete' = 'update';
