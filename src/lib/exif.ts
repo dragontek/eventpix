@@ -6,9 +6,12 @@ import exifr from 'exifr';
  */
 export async function getPhotoTakenDate(file: File): Promise<Date> {
     try {
-        const exifData = await exifr.parse(file, ['DateTimeOriginal', 'CreateDate', 'ModifyDate']);
+        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500));
+        const parsePromise = exifr.parse(file, ['DateTimeOriginal', 'CreateDate', 'ModifyDate']);
+
+        const exifData = await Promise.race([parsePromise, timeoutPromise]);
         if (exifData) {
-            const takenDate = exifData.DateTimeOriginal || exifData.CreateDate || exifData.ModifyDate;
+            const takenDate = (exifData as any).DateTimeOriginal || (exifData as any).CreateDate || (exifData as any).ModifyDate;
             if (takenDate instanceof Date && !isNaN(takenDate.getTime())) {
                 return takenDate;
             }

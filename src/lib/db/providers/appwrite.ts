@@ -445,10 +445,16 @@ export class AppwriteProvider implements DataProvider {
             DOCUMENT_PERMISSIONS
         );
 
-        // Extract creation timestamp from EXIF metadata (or lastModified fallback)
-        const takenDate = await getPhotoTakenDate(file);
+        // Safely extract creation timestamp from EXIF metadata (or lastModified fallback)
+        let takenDateISO = new Date().toISOString();
+        try {
+            const takenDate = await getPhotoTakenDate(file);
+            takenDateISO = takenDate.toISOString();
+        } catch (e) {
+            console.warn("Error getting photo taken date:", e);
+        }
 
-        const photoData = {
+        const photoData: Record<string, any> = {
             file: fileResponse.$id,
             event: eventId,
             owner: data?.owner || this.cachedUser?.id || '',
@@ -458,16 +464,33 @@ export class AppwriteProvider implements DataProvider {
             caption: data?.caption,
             likes: data?.likes || [],
             session_tag: data?.session_tag,
-            taken_at: data?.taken_at || takenDate.toISOString(),
+            taken_at: data?.taken_at || takenDateISO,
         };
 
-        const doc = await this.databases.createDocument(
-            this.config.databaseId,
-            this.config.photosCollectionId,
-            ID.unique(),
-            photoData,
-            DOCUMENT_PERMISSIONS
-        );
+        let doc: Models.Document;
+        try {
+            doc = await this.databases.createDocument(
+                this.config.databaseId,
+                this.config.photosCollectionId,
+                ID.unique(),
+                photoData,
+                DOCUMENT_PERMISSIONS
+            );
+        } catch (err: any) {
+            // Fallback if Appwrite collection schema does not have the 'taken_at' attribute created yet
+            if (err?.message?.includes('taken_at') || err?.message?.includes('attribute') || err?.code === 400) {
+                const { taken_at, ...fallbackData } = photoData;
+                doc = await this.databases.createDocument(
+                    this.config.databaseId,
+                    this.config.photosCollectionId,
+                    ID.unique(),
+                    fallbackData,
+                    DOCUMENT_PERMISSIONS
+                );
+            } else {
+                throw err;
+            }
+        }
 
         return this.mapPhoto(doc);
     }
