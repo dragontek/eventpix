@@ -140,7 +140,14 @@ export default function EventPage({ id: propId }: { id?: string }) {
     };
 
     const handleCameraClick = () => {
-        setIsCameraModalOpen(true);
+        const isMobile = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (isMobile) {
+            // On mobile devices, launch the OS native camera app (matching @capacitor/camera web behavior)
+            cameraInputRef.current?.click();
+        } else {
+            // On desktop/laptop devices, open interactive webcam CameraModal
+            setIsCameraModalOpen(true);
+        }
     };
 
     const uploadFiles = async (files: File[]) => {
