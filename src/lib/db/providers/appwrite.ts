@@ -20,6 +20,8 @@ import type {
     AuthProviderInfo,
 } from '../types';
 
+import { getPhotoTakenDate } from '@/lib/exif';
+
 export interface AppwriteConfig {
     endpoint: string;
     projectId: string;
@@ -150,6 +152,7 @@ export class AppwriteProvider implements DataProvider {
             phash: data.phash,
             owner_name: data.owner_name,
             owner_avatar: data.owner_avatar,
+            taken_at: data.taken_at || doc.$createdAt,
             created: doc.$createdAt,
             updated: doc.$updatedAt,
             expand: data.expand,
@@ -442,6 +445,9 @@ export class AppwriteProvider implements DataProvider {
             DOCUMENT_PERMISSIONS
         );
 
+        // Extract creation timestamp from EXIF metadata (or lastModified fallback)
+        const takenDate = await getPhotoTakenDate(file);
+
         const photoData = {
             file: fileResponse.$id,
             event: eventId,
@@ -452,6 +458,7 @@ export class AppwriteProvider implements DataProvider {
             caption: data?.caption,
             likes: data?.likes || [],
             session_tag: data?.session_tag,
+            taken_at: data?.taken_at || takenDate.toISOString(),
         };
 
         const doc = await this.databases.createDocument(

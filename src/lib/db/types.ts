@@ -40,6 +40,7 @@ export type Photo = {
     phash?: string;
     owner_name?: string;
     owner_avatar?: string;
+    taken_at?: string;
     created: string;
     updated: string;
     expand?: {

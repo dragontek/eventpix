@@ -264,9 +264,9 @@ export default function EventPage({ id: propId }: { id?: string }) {
                 setEditStartDate(toLocalISO(eventRecord.start_date));
                 setEditEndDate(toLocalISO(eventRecord.end_date));
 
-                // Fetch photos
+                // Fetch photos and sort by EXIF taken_at timestamp (newest first)
                 const photoRecords = (await listApprovedPhotos(id)).sort((a, b) =>
-                    new Date(b.created).getTime() - new Date(a.created).getTime()
+                    new Date(b.taken_at || b.created).getTime() - new Date(a.taken_at || a.created).getTime()
                 );
                 const uniquePhotos = Array.from(new Map(photoRecords.map(p => [p.id, p])).values());
                 setPhotos(uniquePhotos);

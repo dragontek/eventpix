@@ -53,6 +53,7 @@ const COLLECTIONS = {
             { key: 'phash', type: 'string', size: 64, required: false },
             { key: 'owner_name', type: 'string', size: 255, required: false },
             { key: 'owner_avatar', type: 'string', size: 2048, required: false },
+            { key: 'taken_at', type: 'string', size: 64, required: false },
         ],
         indexes: [
             { key: 'photos_event', type: 'key', attributes: ['event'] },
