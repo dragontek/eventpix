@@ -6,6 +6,7 @@ import { useSnackbar } from 'notistack';
 import { db, getUser, isAuthenticated, login, register, logout, listEvents, createEvent as dbCreateEvent, onAuthChange, listAuthMethods, authWithOAuth2, createGuestUser } from '@/lib/db';
 
 import UserProfile from '@/components/UserProfile';
+import QRScannerModal from '@/components/QRScannerModal';
 
 export default function Home() {
   const router = useRouter();
@@ -26,6 +27,7 @@ export default function Home() {
 
   // Data State
   const [code, setCode] = useState('');
+  const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -408,12 +410,25 @@ export default function Home() {
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                 />
-                <button
-                  type="submit"
-                  className="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold tracking-wider rounded-lg shadow-lg active:scale-[0.97]"
-                >
-                  Join Event
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    className="flex-1 h-14 bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold tracking-wider rounded-lg shadow-lg active:scale-[0.97] transition"
+                  >
+                    Join Event
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsQRScannerOpen(true)}
+                    className="h-14 px-4 bg-gray-800 hover:bg-gray-700 text-white rounded-lg border border-gray-700 flex items-center justify-center gap-2 font-semibold transition active:scale-[0.97]"
+                    title="Scan Event QR Code"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                    </svg>
+                    <span className="hidden sm:inline">Scan QR</span>
+                  </button>
+                </div>
               </form>
 
               <div className="w-full mt-12 mb-8">
@@ -754,6 +769,12 @@ export default function Home() {
           )}
         </main>
       </div>
+
+      {/* QR Scanner Modal */}
+      <QRScannerModal
+        isOpen={isQRScannerOpen}
+        onClose={() => setIsQRScannerOpen(false)}
+      />
     </div>
   );
 }
