@@ -250,12 +250,14 @@ export default function EventPage({ id: propId }: { id?: string }) {
                         }
                     }
                 } else if (eventRecord.join_mode === 'pin') {
-                    // Check if already joined via LocalStorage (simulating app persistence)
+                    // Check if already joined or verified via LocalStorage
                     const joinedEvents = JSON.parse(localStorage.getItem('joined_events') || '[]');
+                    const savedPin = localStorage.getItem(`event_pin_${eventRecord.id}`);
                     const user = getUser();
-                    // Allow if owner OR if present in local storage
-                    if (eventRecord.owner !== user?.id && !joinedEvents.includes(eventRecord.id)) {
-                        // Redirect to Join Page with Code
+                    const isOwner = eventRecord.owner && user?.id === eventRecord.owner;
+
+                    const isAuthorized = isOwner || joinedEvents.includes(eventRecord.id) || (savedPin && savedPin === eventRecord.pin);
+                    if (!isAuthorized) {
                         console.log("PIN required, redirecting to join page...");
                         router.push(`/join/${eventRecord.code}`);
                         return;

@@ -32,7 +32,7 @@ export default function PhotoCard({
     const fullUrl = getPhotoUrl(photo);
     const isOwner = currentUserId && currentUserId === photo.owner;
     const ownerName = isOwner ? 'You' : (photo.owner_name || 'Guest');
-    const ownerAvatar = photo.owner_avatar || (isOwner ? currentUserAvatar : '');
+    const ownerAvatar = isOwner ? (currentUserAvatar || photo.owner_avatar) : photo.owner_avatar;
 
     const [isEditing, setIsEditing] = useState(false);
     const [caption, setCaption] = useState(photo.caption || '');

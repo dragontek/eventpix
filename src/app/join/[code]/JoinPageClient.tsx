@@ -86,11 +86,18 @@ export default function JoinPage({ code: propCode }: { code?: string }) {
         if (code) init();
     }, [code]);
 
-    // Auto-redirect if already authenticated and no PIN required
+    // Auto-redirect if already joined or authenticated without PIN
     useEffect(() => {
-        if (authStatus === 'success' && event && event.join_mode !== 'pin') {
-            console.log("Already authenticated, redirecting to event...");
-            const joinedEvents = JSON.parse(localStorage.getItem('joined_events') || '[]');
+        if (!event) return;
+        const joinedEvents = JSON.parse(localStorage.getItem('joined_events') || '[]');
+        const savedPin = localStorage.getItem(`event_pin_${event.id}`);
+
+        if (joinedEvents.includes(event.id) || (savedPin && savedPin === event.pin)) {
+            router.push(`/event/${event.id}`);
+            return;
+        }
+
+        if (authStatus === 'success' && event.join_mode !== 'pin') {
             if (!joinedEvents.includes(event.id)) {
                 joinedEvents.push(event.id);
                 localStorage.setItem('joined_events', JSON.stringify(joinedEvents));
@@ -136,10 +143,10 @@ export default function JoinPage({ code: propCode }: { code?: string }) {
             inputRefs.current[index + 1]?.focus();
         }
 
-        // Auto-submit if last digit filled
-        if (index === 3 && value) {
-            // Optional: trigger submit or just let them click button
-            // To be safe, let them click or hit enter, but focus stays
+        // Auto-submit when last digit (4th number) is typed
+        const fullPin = newDigits.join('');
+        if (fullPin.length === 4 && newDigits.every(d => d !== '')) {
+            handleJoin(fullPin);
         }
     };
 
@@ -156,13 +163,15 @@ export default function JoinPage({ code: propCode }: { code?: string }) {
         e.preventDefault();
         const pastedData = e.clipboardData.getData('text').slice(0, 4).split('');
         if (pastedData.every(char => /^\d$/.test(char))) {
-            const newDigits = [...digits];
+            const newDigits = ['', '', '', ''];
             pastedData.forEach((char, i) => {
                 if (i < 4) newDigits[i] = char;
             });
             setDigits(newDigits);
-            if (pastedData.length === 4) {
+            const fullPin = newDigits.join('');
+            if (fullPin.length === 4) {
                 inputRefs.current[3]?.focus();
+                handleJoin(fullPin);
             } else {
                 inputRefs.current[pastedData.length]?.focus();
             }
@@ -172,8 +181,6 @@ export default function JoinPage({ code: propCode }: { code?: string }) {
     const handleOAuthLogin = async (providerName: string) => {
         setLoading(true);
         try {
-            // Pass the event URL as the post-login redirect so the OAuth
-            // callback returns the user straight to the album.
             if (event) {
                 await authWithOAuth2(providerName, `/event/${event.id}`);
                 return;
@@ -186,20 +193,27 @@ export default function JoinPage({ code: propCode }: { code?: string }) {
         }
     };
 
-
-
-    const handleJoin = async () => {
+    const handleJoin = async (overridePin?: string) => {
         if (!event) return;
+        const targetPin = overridePin !== undefined ? overridePin : digits.join('');
 
-        // Ensure we are authenticated
+        // Ensure session exists (create guest session automatically if not authenticated)
         if (authStatus !== 'success' && !isAuthenticated()) {
-            setAuthError("You must be signed in to join.");
-            return;
+            const existingUser = await getCurrentUser();
+            if (existingUser) {
+                setAuthStatus('success');
+            } else {
+                const guestSuccess = await createGuestSession();
+                if (!guestSuccess) {
+                    setPinError("Auth error. Please try again.");
+                    return;
+                }
+            }
         }
 
         // If PIN is required
         if (event.join_mode === 'pin') {
-            if (!pin.trim()) {
+            if (!targetPin.trim()) {
                 setPinError('Please enter the PIN');
                 return;
             }
@@ -208,7 +222,7 @@ export default function JoinPage({ code: propCode }: { code?: string }) {
 
             try {
                 const events = await listEvents();
-                const found = events.find(e => e.code === event.code && e.pin === pin);
+                const found = events.find(e => e.code === event.code && e.pin === targetPin);
 
                 if (found) {
                     const joinedEvents = JSON.parse(localStorage.getItem('joined_events') || '[]');
@@ -216,6 +230,8 @@ export default function JoinPage({ code: propCode }: { code?: string }) {
                         joinedEvents.push(event.id);
                         localStorage.setItem('joined_events', JSON.stringify(joinedEvents));
                     }
+                    localStorage.setItem(`event_pin_${event.id}`, targetPin);
+
                     router.push(`/event/${event.id}`);
                 } else {
                     setPinError('Incorrect PIN');
@@ -228,7 +244,6 @@ export default function JoinPage({ code: propCode }: { code?: string }) {
             }
         } else {
             // Open event
-            // Track join
             const joinedEvents = JSON.parse(localStorage.getItem('joined_events') || '[]');
             if (!joinedEvents.includes(event.id)) {
                 joinedEvents.push(event.id);

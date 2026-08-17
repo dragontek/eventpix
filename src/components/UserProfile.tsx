@@ -33,6 +33,8 @@ export default function UserProfile() {
         router.push('/');
     };
 
+    const [imgError, setImgError] = useState(false);
+
     if (!user) return null;
 
     const avatarUrl = getAvatarUrl(user);
@@ -51,15 +53,16 @@ export default function UserProfile() {
         <div className="relative" ref={menuRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-lg hover:shadow-blue-500/20 transition-all active:scale-95 border border-white/10 overflow-hidden ${avatarUrl ? 'bg-gray-800' : 'bg-gradient-to-br from-blue-500 to-purple-600'
+                className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-lg hover:shadow-blue-500/20 transition-all active:scale-95 border border-white/10 overflow-hidden ${avatarUrl && !imgError ? 'bg-gray-800' : 'bg-gradient-to-br from-blue-500 to-purple-600'
                     }`}
                 title={user.name || user.email}
             >
-                {avatarUrl ? (
+                {avatarUrl && !imgError ? (
                     <img
                         src={avatarUrl}
-                        alt={user.name}
+                        alt={user.name || user.email}
                         className="w-full h-full object-cover"
+                        onError={() => setImgError(true)}
                     />
                 ) : (
                     getInitials()

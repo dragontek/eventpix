@@ -65,5 +65,5 @@ export const createGuestUser = () => db.createGuestUser();
 export const getAvatarUrl = (user: User) => db.getAvatarUrl(user);
 export const getPhotoUrl = (photo: Photo) => db.getPhotoUrl(photo);
 export const getPhotoThumbUrl = (photo: Photo) => db.getPhotoThumbUrl(photo);
-export const updateUser = (data: { name?: string; avatarFile?: File }) => db.updateUser(data);
+export const updateUser = (data: { name?: string; avatarFile?: File; avatarUrl?: string }) => db.updateUser(data);
 export const getStats = () => db.getStats();

@@ -92,6 +92,26 @@ export class AppwriteProvider implements DataProvider {
     async getCurrentUser(): Promise<User | null> {
         try {
             const user = await this.account.get();
+
+            // Check if OAuth session has a profile photo from provider (e.g. Google)
+            if (!user.prefs?.avatar && !user.prefs?.avatarUrl) {
+                try {
+                    const session = await this.account.getSession('current');
+                    if (session && session.provider === 'google' && session.providerAccessToken) {
+                        const res = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${session.providerAccessToken}`);
+                        if (res.ok) {
+                            const info = await res.json();
+                            if (info.picture) {
+                                await this.account.updatePrefs({ ...user.prefs, avatarUrl: info.picture });
+                                user.prefs = { ...user.prefs, avatarUrl: info.picture };
+                            }
+                        }
+                    }
+                } catch {
+                    // Ignore session retrieval error
+                }
+            }
+
             this.cachedUser = this.mapUser(user as Models.User<Record<string, any>>);
         } catch {
             this.cachedUser = null;
@@ -104,11 +124,13 @@ export class AppwriteProvider implements DataProvider {
     }
 
     private mapUser(appwriteUser: Models.User<Record<string, any>>): User {
+        const prefs = appwriteUser.prefs || {};
         return {
             id: appwriteUser.$id,
             email: appwriteUser.email,
             name: appwriteUser.name,
-            avatar: appwriteUser.prefs?.avatar || undefined,
+            avatar: prefs.avatar || undefined,
+            avatarUrl: prefs.avatarUrl || undefined,
             created: appwriteUser.$createdAt,
             updated: appwriteUser.$updatedAt,
         };
@@ -186,18 +208,27 @@ export class AppwriteProvider implements DataProvider {
         const created = await this.account.create('unique()', email, pass, name || '');
         await this.account.createEmailPasswordSession(email, pass);
 
-        const user: User = {
-            id: created.$id,
-            email: created.email,
-            name: created.name || undefined,
-            created: created.$createdAt,
-            updated: created.$createdAt,
-        };
-        this.cachedUser = user;
+        const initialsName = encodeURIComponent(name || email.split('@')[0] || 'Guest');
+        const initialAvatarUrl = `${this.config.endpoint}/avatars/initials?name=${initialsName}&width=96&height=96&project=${this.config.projectId}`;
+
+        try {
+            await this.account.updatePrefs({ avatarUrl: initialAvatarUrl });
+        } catch {
+            // Ignore if pref update fails during session setup
+        }
+
+        const user = await this.loadUser();
         if (this.authCallback) {
             this.authCallback(user);
         }
-        return user;
+        return user || {
+            id: created.$id,
+            email: created.email,
+            name: created.name || undefined,
+            avatarUrl: initialAvatarUrl,
+            created: created.$createdAt,
+            updated: created.$createdAt,
+        };
     }
 
     logout(): void {
@@ -290,7 +321,7 @@ export class AppwriteProvider implements DataProvider {
         await this.loadUser();
     }
 
-    async updateUser(data: { name?: string; avatarFile?: File }): Promise<User> {
+    async updateUser(data: { name?: string; avatarFile?: File; avatarUrl?: string }): Promise<User> {
         if (data.name) {
             await this.account.updateName(data.name);
         }
@@ -301,7 +332,11 @@ export class AppwriteProvider implements DataProvider {
                 data.avatarFile,
                 DOCUMENT_PERMISSIONS
             );
-            await this.account.updatePrefs({ avatar: file.$id });
+            const existingPrefs = this.cachedUser?.avatarUrl ? { avatarUrl: this.cachedUser.avatarUrl } : {};
+            await this.account.updatePrefs({ ...existingPrefs, avatar: file.$id });
+        } else if (data.avatarUrl) {
+            const existingPrefs = this.cachedUser?.avatar ? { avatar: this.cachedUser.avatar } : {};
+            await this.account.updatePrefs({ ...existingPrefs, avatarUrl: data.avatarUrl });
         }
         const user = await this.loadUser();
         if (this.authCallback) {
@@ -318,7 +353,10 @@ export class AppwriteProvider implements DataProvider {
         if (user.avatar) {
             return this.storage.getFilePreview(this.config.avatarsBucketId, user.avatar);
         }
-        const name = encodeURIComponent(user.name || 'Guest');
+        if (user.avatarUrl) {
+            return user.avatarUrl;
+        }
+        const name = encodeURIComponent(user.name || user.email?.split('@')[0] || 'Guest');
         return `${this.config.endpoint}/avatars/initials?name=${name}&width=96&height=96&project=${this.config.projectId}`;
     }
 
